@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Music Rig — 分轨后端 sidecar 启动器（dev 桩）。
+#
+# 通过 tauri-plugin-shell 的 sidecar 机制被 Rust 端拉起。
+# 本桩脚本直接调用系统 python3 运行 python-backend/main.py；
+# 生产构建时由打包流程替换为真正的内嵌 Python 运行时。
+#
+# 独立实现，不依赖任何第三方项目的私有接口。
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# src-tauri/bin/ 的上两级即仓库根目录。
+PY_DIR="${SCRIPT_DIR}/../../python-backend"
+if [ ! -d "$PY_DIR" ]; then
+  # 打包后的应用：python-backend 随 Resources 一同分发。
+  PY_DIR="${SCRIPT_DIR}/../Resources/python-backend"
+fi
+
+if [ ! -d "$PY_DIR" ]; then
+  echo "python-backend not found near $SCRIPT_DIR" >&2
+  exit 1
+fi
+
+cd "$PY_DIR"
+exec python3 main.py

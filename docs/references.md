@@ -48,3 +48,28 @@
 
 ## 其他依赖
 （后续新增依赖时，在此追加记录，注明 URL、许可证、用途。）
+
+### FastAPI
+- **URL**: https://github.com/fastapi/fastapi
+- **许可证**: MIT License
+- **使用方式**: Python 分轨后端（Task 2）的 Web 框架，提供 `/separate`、`/status`、`/stems`、`/health` 接口。作为依赖直接安装（`python-backend/requirements.txt`）。
+
+### Uvicorn
+- **URL**: https://github.com/encode/uvicorn
+- **许可证**: BSD License
+- **使用方式**: 运行 FastAPI 分轨后端的 ASGI 服务器（`python-backend/requirements.txt`）。
+
+### librosa
+- **URL**: https://github.com/librosa/librosa
+- **许可证**: ISC License
+- **使用方式**: 音频分析辅助库（`python-backend/requirements.txt`），Task 2 暂未直接使用，预留给后续响度/标准化处理。
+
+### pyloudnorm
+- **URL**: https://github.com/csteinmetz1/pyloudnorm
+- **许可证**: MIT License
+- **使用方式**: 响度测量辅助库（`python-backend/requirements.txt`），预留给后续分轨后响度对齐。
+
+### reqwest
+- **URL**: https://github.com/seanmonstar/reqwest
+- **许可证**: MIT / Apache 2.0 双许可
+- **使用方式**: Rust 端向 Python sidecar 发起 blocking HTTP 请求的客户端（Task 2，`src-tauri/Cargo.toml`）。

@@ -23,6 +23,8 @@ tauri-plugin-sql = { version = "2.6.0", features = ["sqlite"] }
 # 序列化
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Python sidecar 的 HTTP 通信（调用 FastAPI 分轨服务）
+reqwest = { version = "0.12", features = ["json", "blocking"] }
 # Kontakt / XML / plist 解析（Task 3 起使用）
 quick-xml = "0.42.0"
 plist = "1.10.1"

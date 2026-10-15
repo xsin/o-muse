@@ -28,6 +28,9 @@
     "targets": "all",
     "icon": [
       "../assets/logo.png"
+    ],
+    "externalBin": [
+      "bin/python-stem-backend"
     ]
   }
 }

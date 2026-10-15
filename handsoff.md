@@ -13,8 +13,8 @@
 | Task 0 | 仓库初始化 + 许可证合规 | done | `83eb419` |
 | Task 0.x | 方向纠正：独立实现，移除 StemDeck 源码依赖 | done | `00fc7cc` |
 | Task 0.y | 项目自身许可证 Apache-2.0：LICENSE + NOTICE 归属 + README | done | — |
-| Task 1 | Rust 后端骨架 | done | — |
-| Task 2 | Python Sidecar（分轨引擎） | pending | — |
+| Task 1 | Rust 后端骨架 | done | `18f58b7` |
+| Task 2 | Python Sidecar（分轨引擎） | done | `TBD` |
 | Task 3 | Kontakt 库管理（只读盘点） | pending | — |
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | pending | — |
 | Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | pending | — |
@@ -24,7 +24,7 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 2（Python Sidecar 分轨引擎，前置 Task 1 已完成；注意 Task 2 原 `commands/stemdeck.rs` 已按方向纠正改至 `commands/stem_separation.rs`）。
+**当前应执行**：Task 3（Kontakt 库管理，只读盘点；前置 Task 1/2 完成）。
 
 > **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
 > 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
@@ -109,12 +109,21 @@
 >    并加入 `.gitignore`。后续 cargo 命令需沿用该环境变量。
 > 4. **cargo 退出码陷阱**：`cargo check 2>&1 | tail` 的管道会掩盖真实错误码；改用 `PIPESTATUS[0]` 取 cargo 真实退出码。
 
-### Task 2 — Python Sidecar（分轨引擎）（前置：Task 1）
-- `python-backend/main.py`：FastAPI `POST /separate`、`GET /status/{id}`(SSE)、`GET /stems/{id}`。
-- `requirements.txt`（fastapi/uvicorn/demucs/librosa/pyloudnorm）。
-- `commands/stemdeck.rs`：`start_separation(file_path) -> Result<String>` via **sidecar API**（不在 Rust 直调 python）。
-- `tauri.conf.json` `bundle.externalBin` 配置；壳退出时终止 Python 进程。
-- 验收：py import OK + `cargo check`。
+### Task 2 — Python Sidecar（分轨引擎）（前置：Task 1）✅ done
+- 架构：Rust 通过 **tauri-plugin-shell 的 sidecar API** 启动 Python 服务（**不在 Rust 用 `std::process::Command`**），Rust↔Python 走 **localhost HTTP（reqwest blocking）**。
+- `src-tauri/src/core/stem_engine/sidecar.rs`：真实 `ensure_sidecar()`（首次拉起 sidecar、后台消费 stdout/stderr、轮询 `/health` 就绪）、`kill_sidecar()`（退出清理，Task 7 用）。
+- `src-tauri/src/core/stem_engine/task.rs`：`Error`/`StartResponse`/`StatusResponse`/`StemsResponse` 数据模型 + `start()`/`status()`/`stems()` HTTP 客户端。
+- `src-tauri/src/commands/stem_separation.rs`：真实命令 `separate` / `stem_status` / `stem_results`（均经 sidecar HTTP）。模块名 `stem_separation`，代码内**零 `stemdeck` 字样**。
+- `src-tauri/src/lib.rs`：`SidecarState(Mutex<Option<CommandChild>>)` 经 `manage()` 共享；`generate_handler!` 注册三个分轨命令。
+- `python-backend/`：**独立实现** FastAPI 服务（`server.py` + `separator.py` + `demo.py` + `constants.py` + `main.py` + `requirements.txt`）。引擎默认 Demucs（MIT），**缺失时自动回退 demo 静音 WAV**，保证整条链在沙箱内可编译/联调，不复制任何第三方源码。
+- `tauri.conf.json`：`bundle.externalBin: ["bin/python-stem-backend"]`；`src-tauri/bin/python-stem-backend-aarch64-apple-darwin` 为 dev 桩启动器（调用系统 `python3 main.py`，生产由打包流程替换为内嵌运行时）。
+- 验收：Python 五文件 `py_compile` 全 OK；`cargo check` **0 error / 0 warning**（实际 EXIT=0）。
+- 新增依赖记录：`docs/references.md`（Demucs/fastapi/uvicorn 等）。
+
+> **Task 2 执行备注（偏差记录）**：
+> 1. **externalBin 必须存在**：`tauri.conf.json` 声明 `externalBin` 后，Tauri build-script 强制要求对应平台二进制（如 `python-stem-backend-aarch64-apple-darwin`）存在，否则 `cargo check` 失败。已新增 `src-tauri/bin/` 下的 dev 桩启动器解决，`Cargo.lock` 一并生成。
+> 2. **sidecar 名对齐**：`sidecar.rs` 中 `SIDECAR_NAME = "python-stem-backend"` 与 `externalBin` 注册名一致。
+> 3. **HTTP 通信**：Rust 端 `reqwest` blocking；Python 端 `/health` 轮询上限 30s；`/status` 用 SSE 推流进度。
 
 ### Task 3 — Kontakt 库管理（只读盘点）（前置：Task 1）
 - `core/library_manager/model.rs`：`LibraryEntry` / `Diagnostic`（见 `tdd.md` §3.2）。

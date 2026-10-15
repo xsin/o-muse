@@ -1,0 +1,9 @@
+# Music Rig — 分轨后端依赖（Task 2）
+# Demucs 为实际分轨引擎（MIT），其余为服务编排依赖。
+# 对应参考记录见 docs/references.md（Demucs 条目）。
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+demucs>=4.0
+librosa>=0.10
+pyloudnorm>=0.1.1
