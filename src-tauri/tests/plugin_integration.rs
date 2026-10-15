@@ -297,3 +297,79 @@ fn plugin_info_serializes_for_frontend() {
     let json = serde_json::to_string(&p).expect("应可序列化给前端");
     assert!(json.contains("\"format\":\"VST3\""), "前端依赖大写格式串: {}", json);
 }
+
+// ── review 回归：bundle 内 plist 变更必须使缓存失效 ──────────────
+#[test]
+fn regression_bundle_plist_edit_invalidates_cache() {
+    let root = fixture_root("regr_plist");
+    let b = make_bundle(&root, "Ver", "vst3", "com.ver.plug", "1.0.0");
+    let srcs = vec![ScanSource::standard(root.clone(), PluginFormat::Auto, true)];
+    let conn = cache::open_in_memory().unwrap();
+
+    let mut p1 = discover::discover_plugins(&srcs);
+    cache::extract_with_cache(&conn, &mut p1);
+    assert_eq!(p1[0].version.as_deref(), Some("1.0.0"));
+
+    // 只改版本号且保持长度相同：目录 mtime 不变、总大小不变，
+    // 旧实现（按目录 mtime + 目录大小）会永久命中旧值。
+    let plist = b.join("Contents").join("Info.plist");
+    let text = fs::read_to_string(&plist).unwrap().replace("1.0.0", "1.0.9");
+    fs::write(&plist, text).unwrap();
+
+    let mut p2 = discover::discover_plugins(&srcs);
+    let s = cache::extract_with_cache(&conn, &mut p2);
+
+    assert_eq!(s.misses, 1, "plist 变更后必须重新提取，而非命中旧缓存");
+    assert_eq!(p2[0].version.as_deref(), Some("1.0.9"), "应读到新版本");
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+// ── review 回归：缓存必须恢复 bundle_id ────────────────────────
+#[test]
+fn regression_cache_restores_bundle_id() {
+    let root = fixture_root("regr_bid");
+    make_bundle(&root, "Bid", "component", "com.bid.plug", "1.0");
+    let srcs = vec![ScanSource::standard(root.clone(), PluginFormat::Auto, true)];
+    let conn = cache::open_in_memory().unwrap();
+
+    let mut p1 = discover::discover_plugins(&srcs);
+    cache::extract_with_cache(&conn, &mut p1);
+    assert!(p1[0].bundle_id.is_some(), "首扫应解出 bundle_id");
+
+    let mut p2 = discover::discover_plugins(&srcs);
+    let s = cache::extract_with_cache(&conn, &mut p2);
+    assert_eq!(s.hits, 1);
+    assert_eq!(
+        p2[0].bundle_id.as_deref(),
+        p1[0].bundle_id.as_deref(),
+        "缓存命中后 bundle_id 不得丢失"
+    );
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+// ── review 回归：删除插件后缓存行被清理（库不无限增长）──────────
+#[test]
+fn regression_cache_prunes_deleted_plugins() {
+    let root = fixture_root("regr_prune");
+    make_bundle(&root, "Gone", "vst3", "com.gone.plug", "1.0");
+    let srcs = vec![ScanSource::standard(root.clone(), PluginFormat::Auto, true)];
+    let conn = cache::open_in_memory().unwrap();
+
+    let mut p1 = discover::discover_plugins(&srcs);
+    cache::extract_with_cache(&conn, &mut p1);
+    let cnt: i64 = conn
+        .query_row("SELECT COUNT(*) FROM plugin_cache", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cnt, 1);
+
+    fs::remove_dir_all(&root).unwrap();
+    let p2 = discover::discover_plugins(&srcs);
+    assert!(p2.is_empty());
+    cache::prune_missing(&conn, &p2).unwrap();
+    let cnt2: i64 = conn
+        .query_row("SELECT COUNT(*) FROM plugin_cache", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(cnt2, 0, "已删除插件的缓存行应被清理");
+}
