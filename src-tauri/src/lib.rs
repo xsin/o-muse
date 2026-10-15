@@ -28,6 +28,9 @@ pub fn run() {
             commands::library_manager::scan_libraries,
             commands::library_manager::repair_library,
             commands::plugin_scanner::plugin_scanner_placeholder,
+            commands::plugin_scanner::list_scan_sources,
+            commands::plugin_scanner::scan_all_plugins,
+            commands::plugin_scanner::scan_plugins_by_format,
             commands::license::get_tier,
             commands::license::activate_license_key,
         ])

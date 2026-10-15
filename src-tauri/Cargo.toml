@@ -28,6 +28,9 @@ reqwest = { version = "0.12", features = ["json", "blocking"] }
 # Kontakt / XML / plist 解析（Task 3 起使用）
 quick-xml = "0.42.0"
 plist = "1.10.1"
+# 插件元数据增量缓存（Task 8）：bundled 自带 SQLite 源码，无需系统依赖；
+# 使 core/ 保持"无 Tauri 依赖"，可在单元测试中直接建库验证。
+rusqlite = { version = "0.32", features = ["bundled"] }
 # 通用工具
 chrono = { version = "0.4.45", features = ["serde"] }
 walkdir = "2.5.0"
