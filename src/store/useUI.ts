@@ -3,6 +3,7 @@ import i18n from "../i18n";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type AppId = "stem_separation" | "libraries" | "plugins";
+export type ActiveView = "market" | "settings" | AppId;
 
 function systemPrefersDark(): boolean {
   return (
@@ -18,7 +19,7 @@ function applyTheme(mode: ThemeMode) {
 
 interface UIState {
   openApps: AppId[];
-  activeView: "market" | "settings" | AppId;
+  activeView: ActiveView;
   theme: ThemeMode;
   lang: string;
   openApp: (id: AppId) => void;

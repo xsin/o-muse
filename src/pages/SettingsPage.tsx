@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useUI, type ThemeMode } from "../store/useUI";
+import { OkText, ErrorText, Button, Panel } from "../components/ui";
 
 interface TierInfo {
   tier: "free" | "pro";
   is_pro: boolean;
 }
+
+type MsgKind = "ok" | "err";
 
 export default function SettingsPage() {
   const { t, i18n } = useTranslation();
@@ -14,14 +17,18 @@ export default function SettingsPage() {
   const [tier, setTier] = useState<TierInfo | null>(null);
   const [key, setKey] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgKind, setMsgKind] = useState<MsgKind>("ok");
+  const [tierError, setTierError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function refreshTier() {
     try {
       const info = await invoke<TierInfo>("get_tier");
       setTier(info);
-    } catch {
-      /* 非 Tauri 环境下忽略 */
+      setTierError(null);
+    } catch (e) {
+      // 不再静默忽略：store/后端异常时明确告知用户（review 修复）
+      setTierError(String(e));
     }
   }
 
@@ -33,12 +40,16 @@ export default function SettingsPage() {
     if (!key.trim()) return;
     setBusy(true);
     setMsg(null);
+    setMsgKind("err");
     try {
       const info = await invoke<TierInfo>("activate_license_key", { key });
       setTier(info);
-      setMsg(info.is_pro ? "Pro 已激活" : "密钥无效，仍为免费版");
+      // 用结构化状态而非解析字符串决定颜色（review 修复）
+      setMsgKind(info.is_pro ? "ok" : "err");
+      setMsg(info.is_pro ? t("settings.activated") : t("settings.invalidKey"));
     } catch (e) {
-      setMsg(String(e));
+      setMsgKind("err");
+      setMsg(t("settings.activateFailed", { err: String(e) }));
     } finally {
       setBusy(false);
       setKey("");
@@ -80,12 +91,22 @@ export default function SettingsPage() {
         )}
       </Field>
 
-      <div style={{ marginTop: 24 }}>
-        <label style={{ display: "block", marginBottom: 6, fontSize: 13 }}>
+      {tierError && (
+        <div style={{ marginTop: 12 }}>
+          <ErrorText>{tierError}</ErrorText>
+        </div>
+      )}
+
+      <Panel style={{ marginTop: 24 }}>
+        <label
+          style={{ display: "block", marginBottom: 8, fontSize: 13 }}
+          htmlFor="license-key"
+        >
           {t("settings.tier")} · License Key
         </label>
         <div style={{ display: "flex", gap: 8 }}>
           <input
+            id="license-key"
             value={key}
             onChange={(e) => setKey(e.target.value)}
             placeholder="XXXX-XXXX-XXXX-XXXX"
@@ -98,22 +119,25 @@ export default function SettingsPage() {
               color: "var(--text)",
             }}
           />
-          <button onClick={activate} disabled={busy || !key.trim()}>
-            {t("settings.tierPro")}
-          </button>
-        </div>
-        {msg && (
-          <p
-            style={{
-              fontSize: 13,
-              color: msg.includes("已激活") ? "var(--ok)" : "var(--danger)",
-              marginTop: 8,
-            }}
+          <Button
+            variant="primary"
+            onClick={activate}
+            disabled={busy || !key.trim()}
           >
-            {msg}
-          </p>
-        )}
-      </div>
+            {t("settings.tierPro")}
+          </Button>
+        </div>
+        {msg &&
+          (msgKind === "ok" ? (
+            <div style={{ marginTop: 10 }}>
+              <OkText>{msg}</OkText>
+            </div>
+          ) : (
+            <div style={{ marginTop: 10 }}>
+              <ErrorText>{msg}</ErrorText>
+            </div>
+          ))}
+      </Panel>
     </div>
   );
 }

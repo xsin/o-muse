@@ -47,13 +47,17 @@ export default function Sidebar() {
               gap: 6,
             }}
           >
-            <div
+            <button
               onClick={() => setActive(id)}
+              aria-current={activeView === id ? "page" : undefined}
               style={{
                 flex: 1,
+                minWidth: 0,
                 cursor: "pointer",
                 padding: "8px 12px",
                 borderRadius: 8,
+                border: "none",
+                textAlign: "left",
                 background:
                   activeView === id ? "var(--surface-2)" : "transparent",
                 color: activeView === id ? "var(--brand-strong)" : "var(--text)",
@@ -64,10 +68,11 @@ export default function Sidebar() {
               }}
             >
               {def?.icon} {t(`apps.${id}.name`)}
-            </div>
+            </button>
             <button
               onClick={() => closeApp(id)}
               title={t("common.close")}
+              aria-label={t("common.close")}
               style={{
                 border: "none",
                 background: "transparent",
@@ -94,6 +99,7 @@ export default function Sidebar() {
   );
 }
 
+/** 可键盘操作的导航项（review 修复：此前为纯 div，鼠标专用）。 */
 function NavItem({
   label,
   active,
@@ -104,12 +110,15 @@ function NavItem({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       style={{
         cursor: "pointer",
         padding: "8px 12px",
         borderRadius: 8,
+        border: "none",
+        textAlign: "left",
         background: active ? "var(--surface-2)" : "transparent",
         color: active ? "var(--brand-strong)" : "var(--text)",
         fontSize: 14,
@@ -117,6 +126,6 @@ function NavItem({
       }}
     >
       {label}
-    </div>
+    </button>
   );
 }

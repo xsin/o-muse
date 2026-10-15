@@ -23,4 +23,12 @@ i18n
     },
   });
 
+// 同步 <html lang>：影响屏幕阅读器发音与浏览器拼写/翻译行为（review 修复）。
+function syncHtmlLang() {
+  const lang = i18n.resolvedLanguage ?? "en";
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
+}
+syncHtmlLang();
+i18n.on("languageChanged", syncHtmlLang);
+
 export default i18n;

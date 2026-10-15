@@ -1,6 +1,8 @@
 :root {
   --brand: #6d5efc;
   --brand-strong: #5847e6;
+  /* 品牌色上的前景色：保证正文对比度 >= 4.5:1 */
+  --brand-fg: #ffffff;
   --bg: #f6f7fb;
   --surface: #ffffff;
   --surface-2: #eef0f6;
@@ -11,11 +13,15 @@
   --ok: #2f9e6f;
   --radius: 12px;
   --shadow: 0 1px 3px rgba(20, 24, 40, 0.08);
+  /* 让浏览器原生控件（select/input/滚动条）跟随亮色 */
+  color-scheme: light;
 }
 
 [data-theme="dark"] {
   --brand: #8a7bff;
   --brand-strong: #6d5efc;
+  /* 深色下 brand 更亮，白字对比度不足；改用深前景色 */
+  --brand-fg: #14161f;
   --bg: #14161f;
   --surface: #1d2030;
   --surface-2: #252a3d;
@@ -25,6 +31,8 @@
   --danger: #ff7a63;
   --ok: #4cd09a;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  /* 让原生控件跟随暗色，避免出现亮白下拉框 */
+  color-scheme: dark;
 }
 
 * {
@@ -53,4 +61,26 @@ body {
   100% {
     transform: translateX(250%);
   }
+}
+
+/* 原生控件统一跟随主题（此前 select 完全未样式化，暗色下为亮白） */
+select,
+input,
+button {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }

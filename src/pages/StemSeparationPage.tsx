@@ -2,6 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import {
+  Panel,
+  Button,
+  chip,
+  displayPath,
+  ErrorText,
+  EmptyState,
+  ProgressBar,
+} from "../components/ui";
 
 interface StatusResponse {
   job_id: string;
@@ -121,11 +130,11 @@ export default function StemSeparationPage() {
       </div>
 
       {/* 文件选择 */}
-      <section style={panel}>
+      <Panel>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button onClick={pick} disabled={running} style={btnSecondary}>
+          <Button onClick={pick} disabled={running}>
             {t("stem.pickFile")}
-          </button>
+          </Button>
           <span
             style={{
               flex: 1,
@@ -136,30 +145,20 @@ export default function StemSeparationPage() {
               whiteSpace: "nowrap",
             }}
             title={filePath ?? undefined}
+            aria-label={t("stem.pickFile")}
           >
             {filePath ?? t("stem.noFile")}
           </span>
-          <button
-            onClick={start}
-            disabled={!filePath || running}
-            style={{
-              ...btnPrimary,
-              opacity: !filePath || running ? 0.5 : 1,
-            }}
-          >
+          <Button variant="primary" onClick={start} disabled={!filePath || running}>
             {running ? t("stem.separating") : t("stem.start")}
-          </button>
+          </Button>
         </div>
         <p style={{ margin: "10px 0 0", color: "var(--text-muted)", fontSize: 12 }}>
           {t("stem.hint")}
         </p>
-      </section>
+      </Panel>
 
-      {error && (
-        <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>
-          {t("stem.error", { err: error })}
-        </p>
-      )}
+      {error && <ErrorText>{t("stem.error", { err: error })}</ErrorText>}
 
       {status?.demo && (
         <p style={{ color: "var(--text-muted)", fontSize: 12, margin: 0 }}>
@@ -169,7 +168,7 @@ export default function StemSeparationPage() {
 
       {/* 进度 */}
       {(running || status) && (
-        <section style={panel}>
+        <Panel>
           <div
             style={{
               display: "flex",
@@ -182,24 +181,7 @@ export default function StemSeparationPage() {
             <span>{t(`stem.status.${status?.status ?? "queued"}`)}</span>
             <span>{pct}%</span>
           </div>
-          <div
-            style={{
-              height: 8,
-              background: "var(--surface-2)",
-              borderRadius: 999,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${pct}%`,
-                background: "var(--brand)",
-                borderRadius: 999,
-                transition: "width .3s ease",
-              }}
-            />
-          </div>
+          <ProgressBar value={pct} />
           {status?.stems?.length ? (
             <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
               {status.stems.map((s) => (
@@ -209,18 +191,14 @@ export default function StemSeparationPage() {
               ))}
             </div>
           ) : null}
-        </section>
+        </Panel>
       )}
 
-      {!filePath && !status && (
-        <div style={{ ...panel, color: "var(--text-muted)", fontSize: 13 }}>
-          {t("stem.idle")}
-        </div>
-      )}
+      {!filePath && !status && <EmptyState>{t("stem.idle")}</EmptyState>}
 
       {/* 结果 */}
       {results && (
-        <section style={panel}>
+        <Panel>
           <div
             style={{
               display: "flex",
@@ -231,7 +209,7 @@ export default function StemSeparationPage() {
           >
             <strong style={{ fontSize: 13 }}>{t("stem.files")}</strong>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              {t("stem.output")}: {results.path.replace(/^\/Users\/[^/]+/, "~")}
+              {t("stem.output")}: {displayPath(results.path)}
             </span>
           </div>
           {results.files.length === 0 ? (
@@ -259,7 +237,7 @@ export default function StemSeparationPage() {
               ))}
             </ul>
           )}
-        </section>
+        </Panel>
       )}
 
       {jobId && !running && (
@@ -271,41 +249,3 @@ export default function StemSeparationPage() {
   );
 }
 
-const panel: React.CSSProperties = {
-  padding: 16,
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  boxShadow: "var(--shadow)",
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "8px 16px",
-  borderRadius: 8,
-  border: "none",
-  background: "var(--brand)",
-  color: "#fff",
-  fontWeight: 600,
-  cursor: "pointer",
-  fontSize: 13,
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "var(--surface)",
-  color: "var(--text)",
-  cursor: "pointer",
-  fontSize: 13,
-};
-
-const chip: React.CSSProperties = {
-  display: "inline-block",
-  padding: "2px 8px",
-  borderRadius: 999,
-  background: "var(--surface-2)",
-  color: "var(--text-muted)",
-  fontSize: 11,
-  fontWeight: 600,
-};

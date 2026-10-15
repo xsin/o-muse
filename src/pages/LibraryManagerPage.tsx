@@ -1,6 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  Panel,
+  Button,
+  cell,
+  displayPath,
+  ErrorText,
+  EmptyState,
+  IndeterminateBar,
+} from "../components/ui";
 
 interface Diagnostic {
   MissingPath?: string;
@@ -23,99 +32,127 @@ export default function LibraryManagerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function scan() {
+  const scan = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const result = await invoke<LibraryEntry[]>("scan_libraries");
-      setEntries(result);
+      setEntries(result ?? []);
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     scan();
-  }, []);
+  }, [scan]);
+
+  /** 把 Rust 枚举变体名翻译为本地化文案；未知变体回退为变体名。 */
+  const describeDiagnostic = (d: Diagnostic): string => {
+    const [kind, value] = Object.entries(d)[0] ?? [];
+    if (!kind) return "";
+    const key = `library.diag.${kind}`;
+    const label = t(key, { defaultValue: kind });
+    return value ? `${label}: ${value}` : label;
+  };
 
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ marginTop: 0 }}>{t("apps.libraries.name")}</h1>
-        <button onClick={scan} disabled={loading}>
-          {loading ? t("library.scanning") : t("library.scan")}
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <h1 style={{ margin: 0 }}>{t("apps.libraries.name")}</h1>
+          <Button onClick={scan} disabled={loading}>
+            {loading ? t("library.scanning") : t("library.scan")}
+          </Button>
+        </div>
+        <p style={{ color: "var(--text-muted)", marginTop: 6, fontSize: 13 }}>
+          {t("apps.libraries.desc")}
+        </p>
       </div>
-      <p style={{ color: "var(--text-muted)", marginTop: 0 }}>
-        {t("apps.libraries.desc")}
-      </p>
 
-      {error && <p style={{ color: "var(--danger)" }}>{error}</p>}
+      {loading && <IndeterminateBar />}
+      {error && <ErrorText>{error}</ErrorText>}
+
       {!loading && entries.length === 0 && !error && (
-        <p style={{ color: "var(--text-muted)" }}>{t("library.empty")}</p>
+        <EmptyState>{t("library.empty")}</EmptyState>
       )}
 
       {entries.length > 0 && (
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            marginTop: 16,
-            fontSize: 14,
-          }}
-        >
-          <thead>
-            <tr style={{ textAlign: "left", color: "var(--text-muted)" }}>
-              <th style={cell}>{t("library.cols.name")}</th>
-              <th style={cell}>{t("library.cols.snpid")}</th>
-              <th style={cell}>{t("library.cols.path")}</th>
-              <th style={cell}>{t("library.cols.status")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e, i) => (
-              <tr key={`${e.snpid}-${i}`} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={cell}>{e.name}</td>
-                <td style={cell}>{e.snpid}</td>
-                <td style={{ ...cell, color: "var(--text-muted)" }}>
-                  {e.path ?? "—"}
-                </td>
-                <td style={cell}>
-                  <span style={{ color: e.registered ? "var(--ok)" : "var(--text-muted)" }}>
-                    {e.registered
-                      ? t("library.registered")
-                      : t("library.unregistered")}
-                  </span>
-                  {e.diagnostics.length > 0 && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: "var(--danger)" }}>
-                      {e.diagnostics.map((d, di) => (
-                        <div key={di}>
-                          {Object.entries(d)
-                            .map(([k, v]) => `${k}: ${v}`)
-                            .join("")}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </td>
+        <Panel style={{ padding: 0, overflow: "hidden" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: 13,
+            }}
+          >
+            <thead>
+              <tr style={{ textAlign: "left", background: "var(--surface-2)" }}>
+                {[
+                  t("library.cols.name"),
+                  t("library.cols.snpid"),
+                  t("library.cols.path"),
+                  t("library.cols.status"),
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      ...cell,
+                      fontWeight: 600,
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {entries.map((e, i) => (
+                <tr key={`${e.snpid}-${i}`}>
+                  <td style={cell}>{e.name}</td>
+                  <td style={cell}>{e.snpid}</td>
+                  <td style={{ ...cell, color: "var(--text-muted)" }}>
+                    {e.path ? displayPath(e.path) : "—"}
+                  </td>
+                  <td style={cell}>
+                    <span
+                      style={{
+                        color: e.registered ? "var(--ok)" : "var(--text-muted)",
+                      }}
+                    >
+                      {e.registered
+                        ? t("library.registered")
+                        : t("library.unregistered")}
+                    </span>
+                    {e.diagnostics.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: 4,
+                          fontSize: 12,
+                          color: "var(--danger)",
+                        }}
+                      >
+                        {e.diagnostics.map((d, di) => (
+                          <div key={di}>{describeDiagnostic(d)}</div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
       )}
     </div>
   );
 }
-
-const cell: React.CSSProperties = {
-  padding: "10px 8px",
-  verticalAlign: "top",
-};
