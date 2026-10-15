@@ -73,3 +73,13 @@
 - **URL**: https://github.com/seanmonstar/reqwest
 - **许可证**: MIT / Apache 2.0 双许可
 - **使用方式**: Rust 端向 Python sidecar 发起 blocking HTTP 请求的客户端（Task 2，`src-tauri/Cargo.toml`）。
+
+### quick-xml
+- **URL**: https://github.com/tafia/quick-xml
+- **许可证**: MIT License
+- **使用方式**: Rust 端解析 Native Instruments Service Center XML（`<Application>` 条目）的 XML 解析库（Task 3，`src-tauri/Cargo.toml`）。
+
+### plist
+- **URL**: https://github.com/rustsec/plist-rs
+- **许可证**: MIT License
+- **使用方式**: Rust 端解析 Kontakt 偏好 plist（已注册库与路径）的 plist 解析库（Task 3，`src-tauri/Cargo.toml`）。

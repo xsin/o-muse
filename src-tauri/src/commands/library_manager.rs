@@ -1,7 +1,11 @@
-// Kontakt Library Manager 相关命令（Task 1 骨架，无业务逻辑）
+// Kontakt Library Manager 命令（Task 3）
 
-/// Task 1 占位命令：验证 library_manager 命令模块已注册。
+use crate::core::library_manager;
+use crate::core::library_manager::model::LibraryEntry;
+
+/// 执行一次 Kontakt 库只读盘点，返回所有库条目及诊断信息。
 #[tauri::command]
-pub fn library_manager_placeholder() -> String {
-    "library_manager module placeholder (Task 1)".to_string()
+pub async fn scan_libraries() -> Result<Vec<LibraryEntry>, String> {
+    let entries = library_manager::scan();
+    Ok(entries)
 }

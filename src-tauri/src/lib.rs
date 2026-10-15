@@ -25,7 +25,7 @@ pub fn run() {
             commands::stem_separation::separate,
             commands::stem_separation::stem_status,
             commands::stem_separation::stem_results,
-            commands::library_manager::library_manager_placeholder,
+            commands::library_manager::scan_libraries,
             commands::plugin_scanner::plugin_scanner_placeholder,
         ])
         .run(tauri::generate_context!())

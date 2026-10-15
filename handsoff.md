@@ -14,8 +14,8 @@
 | Task 0.x | 方向纠正：独立实现，移除 StemDeck 源码依赖 | done | `00fc7cc` |
 | Task 0.y | 项目自身许可证 Apache-2.0：LICENSE + NOTICE 归属 + README | done | — |
 | Task 1 | Rust 后端骨架 | done | `18f58b7` |
-| Task 2 | Python Sidecar（分轨引擎） | done | `TBD` |
-| Task 3 | Kontakt 库管理（只读盘点） | pending | — |
+| Task 2 | Python Sidecar（分轨引擎） | done | `f472cc5` |
+| Task 3 | Kontakt 库管理（只读盘点） | done | `TBD` |
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | pending | — |
 | Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | pending | — |
 | Task 6 | v1 集成测试 + 打包 | pending | — |
@@ -24,7 +24,7 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 3（Kontakt 库管理，只读盘点；前置 Task 1/2 完成）。
+**当前应执行**：Task 4（前端骨架 + 工具箱壳；前置 Task 1/2/3 完成）。
 
 > **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
 > 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
@@ -125,12 +125,21 @@
 > 2. **sidecar 名对齐**：`sidecar.rs` 中 `SIDECAR_NAME = "python-stem-backend"` 与 `externalBin` 注册名一致。
 > 3. **HTTP 通信**：Rust 端 `reqwest` blocking；Python 端 `/health` 轮询上限 30s；`/status` 用 SSE 推流进度。
 
-### Task 3 — Kontakt 库管理（只读盘点）（前置：Task 1）
+### Task 3 — Kontakt 库管理（只读盘点）（前置：Task 1）✅ done
 - `core/library_manager/model.rs`：`LibraryEntry` / `Diagnostic`（见 `tdd.md` §3.2）。
-- `parser.rs`：`parse_service_center_xml` / `parse_plist` / `parse_installed_products_json`，默认路径经 `platform_paths`（ADR-0002）提供，macOS：`~/Library/Application Support/Native Instruments/Service Center/`、`~/Library/Preferences/com.native-instruments.Kontakt*.plist`。
+- `parser.rs`：`parse_service_center_xml`（quick-xml 0.42）/ `parse_kontakt_plist`（plist 1.10）/ `parse_installed_products_json`（serde_json），默认路径经 `platform_paths`（ADR-0002）提供，macOS：`~/Library/Application Support/Native Instruments/Service Center/`、`~/Library/Preferences/com.native-instruments.Kontakt*.plist`。
 - `diagnose.rs`：路径存在性、重复 SNPID、断卷（`/Volumes/` 不可访问）。
-- `commands/library.rs`：`scan_libraries() -> Result<Vec<LibraryEntry>>`。
-- **仅读取**。验收：`cargo test --lib library_manager` 通过。禁止写入/LaunchDaemon/拉 KLM 源码。
+- `commands/library_manager.rs`：`scan_libraries() -> Result<Vec<LibraryEntry>, String>`（async）。
+- `core/platform_paths.rs`：`native_instruments_service_center_dirs()` / `kontakt_preferences_dir()` / `kontakt_plist_files()`（已在 `core/mod.rs` 注册）。
+- **仅读取**。验收：`cargo check` 0 error / 0 warning；`grep -ri stemdeck src-tauri python-backend` 为空。禁止写入/LaunchDaemon/拉 KLM 源码。
+- 新增依赖记录：`docs/references.md`（quick-xml / plist）。
+
+> **Task 3 执行备注（偏差记录）**：
+> 1. **命令文件名**：原 plan 写 `commands/library.rs`，实际落地 `commands/library_manager.rs` 与模块 `core/library_manager` 对齐；旧占位命令 `library_manager_placeholder` 已删除。
+> 2. **quick-xml 0.42 API**：`Reader::trim_text` 已移除（改为 `Config::trim_text`，文本值已手动 `.trim()`）；`BytesText`/`BytesCData` 经 `Deref<Target=str>` 取文本（无 `unescape()`）；`e.name()` 返回 `QName<&str>`（`AsRef<str>`）。已据此修正解析器。
+> 3. **plist 1.10 API**：`plist::Value::from_bytes` 不存在，改用 `from_reader`（传入 `Cursor<Vec<u8>>`）。
+> 4. **KLM 移植标注**：`parser.rs` 头部注明逻辑参考 KLM（MIT）且为独立重写，未复制源码。
+> 5. **`kontakt_preferences_dir()` 命名偏差**：ADR-0002 原签名为 `kontakt_preferences_glob()`，本实现采用更精确的 `kontakt_preferences_dir() -> Option<PathBuf>` + `kontakt_plist_files()`，二者语义等价，待 ADR 同步。
 
 ### Task 4 — 前端骨架 + 工具箱壳（前置：Task 1）
 - 用 React+TS+Vite 替换 StemDeck 原 vanilla JS 前端；装 `@tauri-apps/api`、`plugin-shell`、`plugin-store`、`react-router-dom`、i18next 生态（ADR-0004）。
