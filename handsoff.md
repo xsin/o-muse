@@ -19,10 +19,10 @@
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | done | `[Task 4]` |
 | Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | done | `[Task 5]` |
 | Task 6 | v1 集成测试 + 打包 | done | `[Task 6]` |
-| Task 7 | 插件目录自动发现 (v1.1) | pending | — |
-| Task 8 | 插件元数据 + 缓存 (v1.1) | pending | — |
-| Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
-| Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
+| Task 7 | 插件目录自动发现 (v1.1) | done | `a015e38` |
+| Task 8 | 插件元数据 + 缓存 (v1.1) | done | `a015e38` |
+| Task 9 | 自定义目录 + 前端集成 (v1.1) | done | `c00fa5f` |
+| Task 10 | v1.1 集成测试 + 性能 (v1.1) | done | `[Task 10]` |
 
 **当前应执行**：v1 范围（Task 0–6）已全部完成并提交。Task 7–10 属 v1.1（插件扫描器），按用户指示本次**不在范围内**，暂停于此直至下一步指令。
 
@@ -168,26 +168,26 @@
 - **偏差记录（Task 6）**：bundle identifier 由 `com.musicrig.app` 改为 `com.musicrig.desktop`（避免 macOS 与 `.app` 扩展名冲突的 Tauri 警告）。`tauri build --no-bundle` 的 `bins` 警告为库 crate 正常现象（本 crate 为 lib-only，由 Tauri CLI 生成二进制）。
 - 验收：`cargo test` 11 passed；`tauri build --no-bundle` 产物生成；`cargo check` 0 错误/0 警告；前端 `typecheck`/`build` 通过；`grep -ri stemdeck` 空。
 
-### Task 7 — 插件目录自动发现 (v1.1)（前置：Task 6）
-- `plugin_scanner/model.rs`：`ScanSource`/`PluginFormat{AU,VST,VST3,AAX,CLAP,Auto}`/`PluginInfo`（见 `tdd.md` §3.3）。
-- `discover.rs`：`default_sources()` 委托 `platform_paths::default_plugin_scan_sources()`（macOS 标准目录见 `tdd.md`）；`discover_plugins()` 用 walkdir 按扩展名过滤，不读元数据。
-- 验收：`cargo test --lib plugin_scanner::discover`。
+### Task 7 — 插件目录自动发现 (v1.1) ✅ done
+- `plugin_scanner/model.rs`：`ScanSource{path,plugin_format,recursive,enabled,is_custom}`、`PluginFormat{AU,VST,VST3,AAX,CLAP,Auto}`、`PluginInfo{name,vendor?,version?,format,path,bundle_id?,last_modified,file_size}`（`vendor/version/bundle_id` 用 `Option`，UI 渲染 "—"）。
+- `platform_paths::default_plugin_scan_sources()`：按 plan §四 列 **10 个** macOS 标准源（AAX 为 `/Library/Application Support/Avid/Audio/Plug-Ins/`；VST3 含 `~/.vst3/`）。
+- `discover.rs`：`default_sources()`/`discover_plugins()`/`discover_plugins_par()`（rayon 版本）。walkdir 按扩展名过滤，**不读元数据**。MAX_DEPTH=6 防巨型树。
 
-### Task 8 — 插件元数据 + 增量缓存 (v1.1)（前置：Task 7）
-- `extract.rs`：AU/VST3 读 `Contents/Info.plist`；VST2 二进制头；AAX plist；CLAP plist/二进制。VST3 用 `std::thread::spawn` 包裹避免阻塞主线程。
-- `cache.rs`：SQLite `plugin_cache`（见 `tdd.md`）；`file_size+last_modified` 哈希命中直接返回。
-- 验收：`cargo test --lib plugin_scanner::extract && plugin_scanner::cache`。**禁止 dlopen/LoadLibrary**。
+### Task 8 — 插件元数据 + 增量缓存 (v1.1) ✅ done
+- `extract.rs`：AU/VST3/AAX/CLAP 读 `Contents/Info.plist`（`CFBundleName`/`CFBundleIdentifier`/`CFBundleShortVersionString`）；厂商由 bundle id 反推（`com.acme.x`→`Acme`）；VST2 与 plist 缺失时回退**只读字节模式匹配**（版本/名称）。VST3 任务包 `std::thread::spawn`（plan 要求，避免阻塞主线程）。**全程无 dlopen/LoadLibrary**。
+- `cache.rs`：SQLite `plugin_cache(path PK, file_size, last_modified, name, vendor, version, format, scanned_at)`（与 plan 一致）；失效键 = 路径+`file_size`+`last_modified`；`extract_with_cache()` 返回 `CacheStats{hits,misses}` 便于验证命中率。
+- **决策**：缓存用 `rusqlite 0.32 (bundled)` 而非 `tauri-plugin-sql`，以保持 `core/` 无 Tauri 依赖、可在单元测试中直接建库。已记入 `docs/references.md`。
 
-### Task 9 — 自定义目录 + 前端集成 (v1.1)（前置：Task 8）
-- `discover.rs`：`add_custom_source`/`remove_custom_source`（Pro 专属，持久化 store）。
-- `commands/plugins.rs`：`scan_all_plugins`、`add_custom_plugin_dir`、`list_scan_sources`。
-- `PluginManagerPage`：源列表/添加目录（Tauri dialog）/主表格/搜索/扫描进度。
-- 验收：`npm run build && cargo check`。
+### Task 9 — 自定义目录 + 前端集成 (v1.1) ✅ done
+- `plugin_scanner/custom.rs`：自定义源序列化/去重/移除/格式自动检测（单层统计扩展名，最多者胜；不可检测→`Auto`）。**不在 `add_custom_plugin_dir` 内递归扫描**（plan 禁止），递归统一在 `scan_all_plugins`。
+- 命令：`list_scan_sources`、`scan_all_plugins`、`scan_plugins_by_format`、`add_custom_plugin_dir`、`remove_custom_plugin_dir`（后两者经 `require_pro` **Pro 拦截**）、`rescan_plugins`（清缓存重扫）。
+- 新增 `tauri-plugin-dialog 2.2.0`（Rust）+ `@tauri-apps/plugin-dialog`（npm）用于目录选择。
+- `PluginManagerPage`：扫描源 chips（自定义高亮 + ✕ 移除）、扫描/重新扫描、搜索框（名称/厂商）、不确定进度条、主表格（名称/厂商/版本/格式/路径）。`appRegistry` 中 `plugins` 已 `enabled:true` 并去掉 `soon` 徽章。i18n 文案入 `zh/en.json`。
 
-### Task 10 — v1.1 集成测试 + 性能 (v1.1)（前置：Task 9）
-- 模拟目录；`default_sources()` ≥8 目录；扫描数量正确；二次缓存命中 100%。
-- 性能：50 插件首扫 <2s、缓存 <200ms。
-- 验收：`cargo test --test plugin_integration` 通过且基准达标。禁止依赖真实插件。
+### Task 10 — v1.1 集成测试 + 性能 (v1.1) ✅ done
+- `tests/plugin_integration.rs`（**13 用例全过**）：`default_sources()>=8`；模拟目录扫描数量正确；5 种格式全覆盖；**二次扫描 100% 缓存命中**；元数据端到端；损坏 plist/空目录/不存在目录不 panic；并行=串行；磁盘缓存重开仍命中；前端序列化契约。
+- 性能（均达标）：50 插件首扫 **< 2s**；缓存扫描 **< 200ms**。
+- 全程使用 /tmp 模拟目录，**不依赖任何真实插件**。
 
 ---
 

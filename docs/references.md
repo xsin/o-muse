@@ -97,3 +97,18 @@
 - **dev**：`@tauri-apps/cli` (`^2.1.0`, Apache-2.0 OR MIT)、`typescript` (`^5.6.3`, Apache-2.0)、`vite` (`^5.4.10`, MIT)、`@vitejs/plugin-react` (`^4.3.3`, MIT)、`@types/react`/`@types/react-dom` (`^18.3.x`, MIT)。
 
 > 注：前端栈从 plan 的 React19/Vite8/TS7 回退到 React18/Vite5/TS5（tdd.md §7 允许的兜底）。npm 缓存置于仓库内 `.npm-cache/`（沙箱拒写 `~/.npm`）。
+
+### rusqlite（Task 8，v1.1）
+- **URL**: https://github.com/rusqlite/rusqlite
+- **许可证**: MIT License
+- **使用方式**: 插件元数据增量缓存的 SQLite 驱动（`src-tauri/Cargo.toml`，feature `bundled` 自带 SQLite 源码）。
+- **决策说明**: 缓存层选用 `rusqlite` 而非 `tauri-plugin-sql`，以保持 `core/` 无 Tauri 依赖，使缓存逻辑可在单元测试中直接建库验证。`tauri-plugin-sql` 仍保留注册，供 v1.5+ 的其他数据需求使用。
+
+### tauri-plugin-dialog（Task 9，v1.1）
+- **URL**: https://github.com/tauri-apps/plugins-workspace
+- **许可证**: MIT License
+- **使用方式**: 前端"添加自定义目录"的目录选择对话框（Rust `tauri-plugin-dialog 2.2.0` + npm `@tauri-apps/plugin-dialog ^2.8.3`）。
+
+### @tauri-apps/plugin-dialog（Task 9，v1.1，前端）
+- **许可证**: MIT
+- **使用方式**: `PluginManagerPage` 中调用 `open({directory:true})` 选择插件目录。
