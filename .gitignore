@@ -1,0 +1,21 @@
+# ── VCS / metadata ──
+.git/modules
+.gitattributes
+
+# ── env secrets (never commit) ──
+.env
+.env.*
+!.env.example
+
+# ── build / deps ──
+node_modules
+target
+dist
+build
+*.pyc
+__pycache__/
+.DS_Store
+
+# ── Tauri sidecar artifacts ──
+src-tauri/gen
+src-tauri/target

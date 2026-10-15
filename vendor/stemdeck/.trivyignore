@@ -1,0 +1,54 @@
+# CVE-2025-32434: torch remote code execution via torch.load, fixed in 2.6.0.
+# The Intel macOS (x86_64) runtime is pinned to torch>=2.2,<2.3 because
+# PyTorch does not publish macOS x86_64 wheels for 2.6.x. StemDeck never
+# calls torch.load() on untrusted input; all model weights are fetched by
+# Demucs from its own trusted cache. Risk on a local single-user app with
+# no network-facing torch.load path is negligible.
+# Drop this ignore once PyTorch publishes 2.6.x macOS x86_64 wheels or once
+# the torchaudio/torchcodec story stabilises and the pin can be lifted.
+CVE-2025-32434
+
+# DS-0002: Dockerfile missing USER instruction.
+# The image intentionally starts as root so the entrypoint script
+# (build/docker-entrypoint.sh) can re-chown the bind-mounted /app/jobs
+# directory before dropping to the app user (uid 1001) via gosu. The
+# process runs as non-root for its entire lifetime after the entrypoint
+# executes. Trivy's check does not account for the gosu privilege-drop
+# pattern.
+DS-0002
+
+# CVE-2026-63374: anyio's TLSStream encodes host names with IDNA 2003, which
+# can be made to disagree with IDNA 2008 and spoof a TLS certificate. Fixed in
+# anyio 4.14.2; the lock pins 4.13.0.
+#
+# StemDeck never opens a TLSStream. anyio is here transitively: starlette uses
+# it for task groups and thread offloading, not for sockets, and httpx (which
+# does use it for TLS) is a dev-only dependency, present for FastAPI's
+# TestClient. The server itself speaks plain HTTP on localhost, and the two
+# things that do fetch over TLS, yt-dlp and audio-separator, bring their own
+# HTTP stacks.
+#
+# Not fixed in place because the fix is not a one-line bump: regenerating the
+# lock for it also rewrites platform markers across a dozen packages, including
+# the Intel macOS paths that pyproject gates by hand, and any uv.lock change
+# sends every existing desktop install to a full download instead of an in-app
+# update. Take the bump the next time the lock moves for another reason, and
+# drop this entry then.
+CVE-2026-63374
+
+# CVE-2026-97687 (traffic interception through an HTTPS proxy's TLS
+# configuration) and CVE-2026-97689 (denial of service through unbounded
+# memory): urllib3, fixed in 2.8.0; the lock pins 2.7.0.
+#
+# StemDeck's own requests all go through the standard library's urllib.
+# urllib3 is here only through requests, which audio-separator, librosa's
+# pooch and Whisper's tiktoken use to download models and data from fixed
+# hosts (GitHub, Hugging Face, OpenAI's CDN). The first needs an HTTPS proxy
+# configured, the second a hostile server on one of those downloads.
+#
+# Not bumped now for the same reason as CVE-2026-63374: any uv.lock change
+# sends every existing desktop install to a full download instead of an
+# in-app update, and 0.19.0 already did that two days before 0.19.1. Take the
+# bump the next time the lock moves for another reason, and drop these then.
+CVE-2026-97687
+CVE-2026-97689

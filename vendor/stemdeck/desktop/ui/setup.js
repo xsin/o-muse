@@ -1,0 +1,547 @@
+const { invoke } = window.__TAURI__.core;
+
+let _runtimeUnlisten = null;
+
+// The backend always binds all interfaces; network availability is gated live
+// by the backend itself (Settings → "Make StemDeck available on your network").
+function startBackend() {
+  return invoke("start_backend");
+}
+
+const statusEl = document.getElementById("status");
+const detailsEl = document.getElementById("details");
+const retryBtn = document.getElementById("retry");
+const steps = [...document.querySelectorAll("[data-step]")];
+
+function setStep(name, state) {
+  const el = steps.find((item) => item.dataset.step === name);
+  if (!el) return;
+  el.classList.remove("active", "done", "error");
+  if (state) el.classList.add(state);
+}
+
+function setStatus(message) {
+  statusEl.textContent = message;
+}
+
+function showError(error, hint) {
+  for (const el of steps) {
+    if (el.classList.contains("active")) {
+      el.classList.replace("active", "error");
+    }
+  }
+  setStatus("Setup could not complete.");
+  const msg = String(error?.message ?? error);
+  detailsEl.textContent = hint ? `${msg}\n\n→ ${hint}` : msg;
+  detailsEl.classList.remove("hidden");
+  retryBtn.classList.remove("hidden");
+}
+
+async function runStep(name, fn) {
+  setStep(name, "active");
+  try {
+    const result = await fn();
+    setStep(name, "done");
+    return result;
+  } catch (err) {
+    setStep(name, "error");
+    throw err;
+  }
+}
+
+function minDelay(ms) {
+  return Promise.all([
+    new Promise((r) => setTimeout(r, ms)),
+    new Promise((r) => requestAnimationFrame(r)),
+  ]);
+}
+
+function formatElapsed(startedAt) {
+  const seconds = Math.floor((Date.now() - startedAt) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes > 0 ? `${minutes}m ${rest}s` : `${rest}s`;
+}
+
+function startProgressStatus(messages) {
+  const startedAt = Date.now();
+  let messageIndex = 0;
+
+  const update = () => {
+    const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+    while (
+      messageIndex + 1 < messages.length &&
+      elapsedSeconds >= messages[messageIndex + 1].afterSeconds
+    ) {
+      messageIndex += 1;
+    }
+
+    setStatus(`${messages[messageIndex].text} Elapsed: ${formatElapsed(startedAt)}.`);
+  };
+
+  update();
+  const timer = window.setInterval(update, 1000);
+  return () => window.clearInterval(timer);
+}
+
+/**
+ * Real progress for the pip passes that install CUDA acceleration.
+ *
+ * Those passes move several GB, and until the backend streamed pip's output
+ * there was nothing to show but a timer counting up, which reads exactly like
+ * the freeze it replaced (#502). The timed messages stay as the opening line
+ * and as the fallback for a machine that has everything cached and never
+ * downloads anything; the first real byte count takes over from them.
+ *
+ * Returns a stop function that unregisters the listener and hides the bar.
+ */
+async function startPipProgress(stopTimedMessages) {
+  const progressWrap = document.getElementById("progress-wrap");
+  const progressFill = document.getElementById("progress-fill");
+  let tookOver = false;
+
+  const unlisten = await window.__TAURI__.event.listen("setup-progress", (event) => {
+    const { detail, received, total } = event.payload ?? {};
+    // Only now is there something truthful to show, so this is where the
+    // elapsed-time messages are retired rather than up front.
+    if (!tookOver) {
+      tookOver = true;
+      stopTimedMessages();
+      progressWrap.classList.remove("hidden");
+    }
+    if (Number.isFinite(received) && Number.isFinite(total) && total > 0) {
+      const pct = Math.min(100, Math.round((received / total) * 100));
+      progressFill.style.width = `${pct}%`;
+      progressFill.classList.remove("indeterminate");
+      setStatus(`${detail}... ${(received / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB`);
+    } else {
+      // Resolving, or installing what it already fetched. Real work with no
+      // measurable size, which is what indeterminate is for.
+      progressFill.classList.add("indeterminate");
+      setStatus(`${detail}...`);
+    }
+  });
+
+  return () => {
+    unlisten();
+    progressWrap.classList.add("hidden");
+    progressFill.classList.remove("indeterminate");
+  };
+}
+
+function isMac() {
+  return /mac/i.test(navigator.userAgentData?.platform ?? navigator.platform ?? "");
+}
+
+async function installRuntimePack(appRoot) {
+  const status = await invoke("runtime_pack_status");
+  if (!status.manifestReady) {
+    throw Object.assign(
+      new Error(`Python runtime not found under ${appRoot}.`),
+      { hint: "Try reinstalling StemDeck. If the problem persists, check that your disk has at least 2 GB free." }
+    );
+  }
+
+  const progressWrap = document.getElementById("progress-wrap");
+  const progressFill = document.getElementById("progress-fill");
+
+  // lastProgressAt is updated by the SSE handler below; only meaningful
+  // during a network download, so it is reset just before download starts.
+  let lastReceived = 0;
+  let lastProgressAt = Date.now();
+  const STALL_WARN_MS = 30_000;
+
+  // Guard against stacked listeners on rapid retry (#146): unlisten any
+  // previous registration before creating a new one.
+  if (_runtimeUnlisten) { _runtimeUnlisten(); _runtimeUnlisten = null; }
+
+  const unlisten = await window.__TAURI__.event.listen(
+    "runtime-download-progress",
+    (event) => {
+      const { received, total } = event.payload;
+      if (received !== lastReceived) {
+        lastReceived = received;
+        lastProgressAt = Date.now();
+      }
+      const mb = (received / 1e6).toFixed(0);
+      if (total && total > 0) {
+        const pct = Math.min(100, Math.round((received / total) * 100));
+        progressFill.style.width = `${pct}%`;
+        progressFill.classList.remove("indeterminate");
+        setStatus(`Downloading StemDeck runtime... ${mb} / ${(total / 1e6).toFixed(0)} MB`);
+      } else {
+        progressFill.classList.add("indeterminate");
+        setStatus(`Downloading StemDeck runtime... ${mb} MB received`);
+      }
+    }
+  );
+  _runtimeUnlisten = unlisten;
+
+  progressWrap.classList.remove("hidden");
+  progressFill.style.width = "0%";
+  progressFill.classList.remove("indeterminate");
+
+  try {
+    let verified = false;
+    if (status.archiveReady) {
+      try {
+        setStatus("Runtime archive found locally, verifying...");
+        progressWrap.classList.add("hidden");
+        await invoke("verify_runtime_pack");
+        verified = true;
+      } catch {
+        // Stale or corrupt archive — fall through to re-download
+      }
+    }
+    if (!verified) {
+      progressWrap.classList.remove("hidden");
+      setStatus("Downloading StemDeck runtime...");
+
+      // Reset stall baseline when network download is actually about to start (#150).
+      lastProgressAt = Date.now();
+
+      // stallTimer starts here, not at top of function, so it doesn't fire
+      // during the local verify_runtime_pack path (#150).
+      // When a stall is detected it stops startProgressStatus first to avoid
+      // both timers writing setStatus concurrently (#149).
+      let stopSlowMsg = null;
+      const stallTimer = window.setInterval(() => {
+        const stallMs = Date.now() - lastProgressAt;
+        if (stallMs >= STALL_WARN_MS) {
+          if (stopSlowMsg) { stopSlowMsg(); stopSlowMsg = null; }
+          setStatus(
+            stallMs >= 60_000
+              ? "Download appears unreachable — check your internet connection and click Retry."
+              : "Download seems slow or stalled — check your internet connection."
+          );
+        }
+      }, 5_000);
+
+      // startProgressStatus is assigned after stallTimer creation; the closure
+      // above captures stopSlowMsg by reference, so it sees the updated value.
+      stopSlowMsg = startProgressStatus([
+        { afterSeconds: 0,  text: "Downloading StemDeck runtime..." },
+        { afterSeconds: 30, text: "Still downloading runtime... slow connection detected." },
+        { afterSeconds: 90, text: "Still downloading... large file on a slow connection can take a few minutes." },
+      ]);
+
+      try {
+        await invoke("download_runtime_pack");
+      } catch (err) {
+        throw Object.assign(
+          new Error(String(err)),
+          { hint: "Check your internet connection and click Retry. If the problem persists, try a different network." }
+        );
+      } finally {
+        window.clearInterval(stallTimer);
+        if (stopSlowMsg) { stopSlowMsg(); }
+      }
+      progressWrap.classList.add("hidden");
+      setStatus("Verifying StemDeck runtime...");
+      await invoke("verify_runtime_pack");
+    }
+    setStatus("Installing StemDeck runtime...");
+    const installed = await invoke("extract_runtime_pack");
+    if (!installed.runtimeReady) {
+      throw Object.assign(
+        new Error("Runtime install finished but Python/backend files were not found."),
+        { hint: "Your disk may be full or the archive may be corrupt. Free up space and click Retry to re-download." }
+      );
+    }
+  } finally {
+    _runtimeUnlisten = null;
+    unlisten();
+    progressWrap.classList.add("hidden");
+  }
+}
+
+// What to tell someone whose FFmpeg step just failed.
+//
+// This used to be one sentence about networks and firewalls, attached to every
+// failure of the step. That is right for a download that did not arrive, and
+// actively misleading for a download that arrived and then would not run: a
+// reporter on an Apple Silicon Mac was told to check their firewall when the
+// binary they had was built for Intel (#637).
+//
+// macOS reports that case as EBADARCH, "Bad CPU type in executable (os error
+// 86)". It happens when the per-architecture primary source is unreachable and
+// the fallback, which publishes Intel builds only, is used instead. Rosetta
+// normally papers over it, but a bare exec() never triggers Rosetta's
+// install-on-demand prompt, so a Mac without it just fails.
+function ffmpegFailureHint(message) {
+  const wrongArchitecture = /bad cpu type|os error 86|EBADARCH/i.test(message);
+  if (wrongArchitecture) {
+    return (
+      "The FFmpeg that was downloaded is built for a different kind of Mac than yours, " +
+      "so it cannot run. This happens when the Apple Silicon download source is " +
+      "unreachable and StemDeck falls back to an Intel-only build. Two ways out: " +
+      'install Rosetta with "softwareupdate --install-rosetta" in Terminal, which lets ' +
+      "Intel builds run, or point StemDeck at a matching build by setting the " +
+      "STEMDECK_FFMPEG_URL environment variable before launching. Deleting the ffmpeg " +
+      "folder in StemDeck's data directory before retrying lets it fetch a fresh copy."
+    );
+  }
+  return (
+    "If this keeps failing, your network or firewall may be blocking the FFmpeg " +
+    "download server. You can point StemDeck at a different FFmpeg build by " +
+    "setting the STEMDECK_FFMPEG_URL environment variable before launching, then " +
+    "retrying."
+  );
+}
+
+async function runSetup() {
+  detailsEl.classList.add("hidden");
+  retryBtn.classList.add("hidden");
+  for (const step of steps) step.classList.remove("active", "done", "error");
+
+  try {
+    setStep("runtime", "active");
+    setStatus("Checking Python runtime...");
+    let [runtime] = await Promise.all([
+      invoke("probe_runtime"),
+      minDelay(350),
+    ]);
+
+    // Compare the installed runtime against the version this app bundle expects.
+    // On a DMG upgrade the old runtime is still fully "ready", so this MUST be
+    // checked before the early-return below -- otherwise setup starts the stale
+    // backend + frontend and the new release (e.g. new features, version) never
+    // takes effect until the runtime is manually cleared.
+    const runtimeStatus = await invoke("runtime_pack_status");
+    const expectedVersion = runtimeStatus.manifest?.version;
+    const installedVersion = runtimeStatus.installedVersion;
+    // Mismatch when this build expects a version the installed runtime isn't.
+    // An unknown installedVersion (a runtime from a build that never recorded
+    // one) also counts, so an upgrade still refreshes it. Self-heals: after one
+    // refresh the install records the version and subsequent launches match.
+    const versionMismatch = Boolean(expectedVersion) && installedVersion !== expectedVersion;
+
+    // A persisted torch device only counts as settled when it is a positive
+    // result ("cuda"/"mps") or the package itself is CPU-only. A CPU device
+    // born from a failure (no GPU found, CUDA verify failed) -- or from a build
+    // that predates reason tracking -- re-runs the GPU step on this launch, so
+    // a single bad first run can't pin the install to CPU forever (#247).
+    // Cost when nothing changed: one fast nvidia-smi probe.
+    //
+    // A GPU that every offered CUDA build refused for having no kernels for it
+    // is settled too: trying the same builds again cannot go differently, and
+    // did cost about 45 s of download and install on every launch (#733). A
+    // new version re-runs setup through versionMismatch below, which is when
+    // different builds could be on offer.
+    const torchDeviceSettled =
+      runtime.torchDevice === "cuda" ||
+      runtime.torchDevice === "mps" ||
+      (runtime.torchDevice === "cpu" && runtime.torchDeviceReason === "cpu-only-package") ||
+      (runtime.torchDevice === "cpu" && runtime.torchDeviceReason === "cuda-unsupported-gpu");
+
+    if (runtime.pythonReady && runtime.ffmpegReady && torchDeviceSettled && !versionMismatch) {
+      for (const step of steps) {
+        step.classList.remove("active", "error");
+        if (step.dataset.step === "backend") {
+          step.classList.remove("done");
+        } else {
+          step.classList.add("done");
+        }
+      }
+      await runStep("backend", async () => {
+        setStatus("Runtime is ready. Starting StemDeck backend...");
+        const backend = await startBackend();
+        setStatus("Opening StemDeck...");
+        window.location.replace(backend.url);
+      });
+      return;
+    }
+
+    if (!runtime.pythonReady || versionMismatch) {
+      if (versionMismatch) {
+        setStatus(`Updating runtime from ${installedVersion || "an older build"} to ${expectedVersion}...`);
+      }
+      await invoke("ensure_workspace");
+      await installRuntimePack(runtime.appRoot);
+      runtime = await invoke("probe_runtime");
+      if (!runtime.pythonReady) {
+        setStep("runtime", "error");
+        throw Object.assign(
+          new Error(`Python runtime setup failed under: ${runtime.dataDir}`),
+          { hint: "Check that your disk has at least 2 GB free and click Retry. If it keeps failing, try reinstalling StemDeck." }
+        );
+      }
+    }
+    setStep("runtime", "done");
+    setStatus(`Python runtime found at ${runtime.pythonPath}`);
+    await minDelay(200);
+
+    let gpuSummary = "";
+
+    await runStep("workspace", () => invoke("ensure_workspace"));
+
+    if (runtime.ffmpegReady) {
+      setStep("ffmpeg", "done");
+    } else {
+      await runStep("ffmpeg", async () => {
+        const stopProgress = startProgressStatus([
+          {
+            afterSeconds: 0,
+            text: "Downloading FFmpeg... this can take a few minutes on first run.",
+          },
+          {
+            afterSeconds: 60,
+            text: "Still downloading FFmpeg... slow networks or antivirus scans can delay this.",
+          },
+        ]);
+
+        try {
+          const assets = await invoke("ensure_external_assets");
+          if (!assets.ffmpegReady) {
+            throw new Error(
+              "FFmpeg setup did not complete. Check your internet connection and retry."
+            );
+          }
+        } catch (err) {
+          // showError (the outer catch-all) reads error.hint, so attach one
+          // here rather than only in the generic path -- a network/firewall
+          // block on the FFmpeg host is common enough (and retrying alone
+          // won't fix it) to deserve a specific next step, not just "retry".
+          const message = String(err?.message ?? err);
+          const wrapped = new Error(message);
+          wrapped.hint = ffmpegFailureHint(message);
+          throw wrapped;
+        } finally {
+          stopProgress();
+        }
+      });
+    }
+
+    await runStep("gpu", async () => {
+      const macGPU = isMac();
+      const stopProgress = startProgressStatus(
+        macGPU
+          ? [
+              {
+                afterSeconds: 0,
+                text: "Checking Apple Silicon compute support...",
+              },
+              {
+                afterSeconds: 10,
+                text: "Verifying MPS acceleration for AI models...",
+              },
+            ]
+          : [
+              {
+                afterSeconds: 0,
+                text: "Checking NVIDIA GPU and compute support...",
+              },
+              {
+                afterSeconds: 20,
+                text: "Installing NVIDIA acceleration if needed... first run can take 5-15 minutes.",
+              },
+              {
+                afterSeconds: 120,
+                text: "Still installing NVIDIA acceleration... CUDA Torch packages are large.",
+              },
+              {
+                afterSeconds: 300,
+                text: "Still working... setup should finish or time out automatically.",
+              },
+            ]
+      );
+      // macOS never runs a pip pass here, so there is nothing to listen for.
+      const stopPipProgress = macGPU ? null : await startPipProgress(stopProgress);
+
+      try {
+        const gpu = await invoke("ensure_torch_device");
+        if (macGPU) {
+          gpuSummary =
+            gpu.torchDevice === "mps"
+              ? `${gpu.gpuName} acceleration enabled`
+              : "MPS acceleration unavailable - stem separation will use CPU";
+        } else {
+          if (gpu.gpuDetected && !gpu.cudaVerified && gpu.reason === "cuda-unsupported-gpu") {
+            showError(
+              `GPU detected (${gpu.gpuName}), but none of the CUDA builds StemDeck can install support it - stem separation will use CPU. StemDeck will not try again until the next update.`
+            );
+          } else if (gpu.gpuDetected && !gpu.cudaVerified) {
+            showError(
+              `GPU detected (${gpu.gpuName}) but CUDA setup failed - stem separation will use CPU.\nCheck logs/setup.log in the StemDeck data folder for details.`
+            );
+          }
+          gpuSummary = gpu.gpuDetected
+            ? gpu.cudaVerified
+              ? `${gpu.gpuName} - CUDA ${gpu.cudaVersion} enabled`
+              : `${gpu.gpuName} found - falling back to CPU (CUDA unverified)`
+            : "No NVIDIA GPU - stem separation will use CPU";
+        }
+        return gpu;
+      } finally {
+        stopProgress();
+        stopPipProgress?.();
+      }
+    });
+
+    await runStep("model", async () => {
+      const stopProgress = startProgressStatus([
+        {
+          afterSeconds: 0,
+          text: "Downloading AI models... this can take a few minutes on first run.",
+        },
+        {
+          afterSeconds: 60,
+          text: "Still downloading AI models... slow networks can delay this.",
+        },
+        {
+          afterSeconds: 300,
+          text: "Still working... large models can take a while on a slow connection.",
+        },
+      ]);
+      try {
+        // Best-effort, per model: any model that doesn't download here just
+        // falls back to its existing lazy-download-on-first-use behavior --
+        // never fails setup over this (warmup_models itself never throws for
+        // an individual model failure; this catch is only for the whole
+        // subprocess failing to run at all, e.g. a missing Python).
+        //
+        // The per-model result was thrown away here, so a user whose beat
+        // model never arrived saw a clean setup and then a permanently worse
+        // beat grid, with nothing anywhere connecting the two (#502). Naming
+        // it at least puts it in the log that gets attached to bug reports.
+        //
+        // Deliberately not setStatus: the next step overwrites the status line
+        // immediately and then navigates away to the backend, so anything
+        // written here is invisible. Telling the user properly belongs in the
+        // main UI, where the affected feature actually lives, and is its own
+        // piece of work.
+        // camelCase, because ModelWarmupStatus is #[serde(rename_all =
+        // "camelCase")]. Reading the Rust field names instead gives four
+        // undefineds, `missing` is empty every time, and this says nothing.
+        const status = await invoke("warmup_models");
+        const missing = [
+          [status?.demucsReady, "stem separation"],
+          [status?.beatThisReady, "beat detection"],
+          [status?.sectionsReady, "song sections"],
+          [status?.vocalSplitReady, "karaoke split"],
+        ]
+          .filter(([ready]) => ready === false)
+          .map(([, label]) => label);
+        if (missing.length) {
+          console.warn("models not downloaded during setup:", missing.join(", "));
+        }
+      } catch (err) {
+        console.warn("model warmup failed (will download lazily on first use):", err);
+      } finally {
+        stopProgress();
+      }
+    });
+
+    await runStep("backend", async () => {
+      setStatus(gpuSummary ? `${gpuSummary} - starting backend...` : "Starting StemDeck backend...");
+      const backend = await startBackend();
+      setStatus("Opening StemDeck...");
+      window.location.replace(backend.url);
+    });
+  } catch (error) {
+    showError(error, error?.hint);
+  }
+}
+
+retryBtn.addEventListener("click", runSetup);
+runSetup();

@@ -1,0 +1,24 @@
+本产品（Music Rig）包含来自以下开源项目的代码或逻辑：
+
+─────────────────────────────────────────────────────
+项目一：StemDeck
+来源：https://github.com/stemdeckapp/stemdeck
+拉取版本：commit 5f9405ca68ac31b31ae07ac416141d4d1f7b5f3a
+版权：Copyright (c) Thales Claro
+许可证：Apache License, Version 2.0（见 licenses/APACHE-2.0.txt）
+
+本产品基于 StemDeck 源码进行定制化改造。StemDeck 项目明确声明
+不接受任何资金、赞助或资助。本产品与 StemDeck 项目及其作者无
+任何官方关联、合作或背书关系。本产品的商业化行为不代表 StemDeck
+项目立场。
+
+─────────────────────────────────────────────────────
+项目二：KLM - Kontakt Library Manager
+来源：https://github.com/cloinse/klm
+版权：Copyright (c) cloinse
+许可证：MIT License（见 licenses/MIT.txt）
+
+本产品参考 KLM 的 Kontakt 库元数据解析逻辑与安全文件操作模型，
+用 Rust 语言重新实现。未直接复制 KLM 的 Flutter/Dart 源代码。
+
+─────────────────────────────────────────────────────

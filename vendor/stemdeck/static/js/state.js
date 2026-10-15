@@ -1,0 +1,275 @@
+import { $, storeGet, storeSet } from "./utils.js";
+import { STEM_NAMES } from "./constants.js";
+
+// ─── DOM refs ───
+
+export const form = $("job-form");
+export const urlInput = $("url");
+export const submitBtn = $("submit");
+
+export const playBtn = $("t-play");
+export const playMiniBtn = $("t-play-mini");
+export const stopBtn = $("t-stop");
+export const loopBtn = $("t-loop");
+export const titleEl = $("title");
+export const bpmChip = $("t-bpm");
+export const keyChip = $("t-key");
+export const stemsChip = $("t-stems-chip");
+export const timeEl = $("t-time");
+export const masterFader = $("t-master");
+export const speedBtns = ["t-speed-05", "t-speed-075", "t-speed-1"].map($);
+export const pitchDownBtn = $("t-pitch-down");
+export const pitchUpBtn = $("t-pitch-up");
+export const pitchValueEl = $("t-pitch-value");
+export const pitchResetBtn = $("t-pitch-reset");
+// The group wrappers, not the buttons: a disabled button does not fire
+// pointer events in every browser, so a title on it is unreadable exactly
+// when it has something to say.
+export const pitchWrap = $("t-pitch-wrap");
+export const speedWrap = $("t-speed-wrap");
+export const npArt = $("np-art");
+export const npThumb = $("np-thumb");
+
+export const jobBox = $("job");
+export const jobTitleEl = $("job-title");
+export const jobStageEl = $("job-stage");
+export const jobDetailEl = $("job-detail");
+export const jobCancelBtn = $("job-cancel");
+export const progressEl = $("progress");
+
+export const errorEl = $("error");
+export const lanesEl = $("lanes");
+export const mixerEl = $("mixer");
+export const multitrackContainer = $("multitrack-container");
+export const wavesGrid = $("waves-grid");
+export const rulerTime = $("ruler-time");
+export const loopRegionEl = $("loop-region");
+export const playheadMarker = document.querySelector(".playhead-marker");
+export const waveScroll = $("wave-scroll");
+export const waveCanvas = $("wave-canvas");
+export const presenceRulerEl = $("presence-ruler");
+export const presencePlayheadEl = $("presence-playhead");
+export const footerTimeElapsed = $("footer-time-elapsed");
+export const footerTimeTotal = $("footer-time-total");
+export const footerWaveTicks = $("footer-wave-ticks");
+export const loopStartInput = $("t-loop-start");
+export const loopEndInput = $("t-loop-end");
+export const metroBtn = $("t-metro");
+export const metroPanel = $("t-metro-panel");
+export const metroMoreBtn = $("t-metro-more");
+export const metroVolEl = $("t-metro-vol");
+export const metroVolBtn = $("t-metro-vol-btn");
+export const metroVolPanel = $("t-metro-vol-panel");
+export const metroVolLabel = $("t-metro-vol-label");
+export const metroBarEl = $("t-metro-bar");
+export const metroNoteEl = $("t-metro-note");
+export const metroHalfBtn = $("t-metro-half");
+export const metroOneBtn = $("t-metro-one");
+export const metroDoubleBtn = $("t-metro-double");
+export const metroCountInEl = $("t-metro-countin");
+export const metroBarCustomEl = $("t-metro-bar-custom");
+export const metroGroupEl = $("t-metro-group");
+export const metroEditBtn = $("t-metro-edit");
+export const exportClickEl = $("t-export-click");
+export const exportClickWrap = $("t-export-click-wrap");
+export const exportCountInEl = $("t-export-count-in");
+export const exportCountInWrap = $("t-export-count-in-wrap");
+export const bgToolbar = $("beatgrid-toolbar");
+export const bgCanvas = $("beatgrid-canvas");
+export const bgUndoBtn = $("bg-undo");
+export const bgRedoBtn = $("bg-redo");
+export const bgResetBtn = $("bg-reset");
+export const bgDoneBtn = $("bg-done");
+export const bgRippleEl = $("bg-ripple");
+export const bgSnapEl = $("bg-snap");
+export const bgBarLenEl = $("bg-barlen");
+export const bgHintEl = $("bg-hint");
+export const stemListEl = document.querySelector(".stem-list");
+export const npScrubEl = document.querySelector(".np-scrub");
+export const npScrubFill     = $("footer-scrub-fill");
+export const footerTitle     = $("footer-title");
+export const footerMeta      = $("footer-meta");
+export const footerThumb     = $("footer-thumb");
+
+// ─── Mutable state ───
+
+export let eventSource = null;
+export let multitrack = null;
+// Web Audio decode-and-mix engine (Safari-safe playback). Null = legacy streaming path.
+export let audioEngine = null;
+export let currentJobId = null;
+// The import whose progress owns the #job box and the studio view. Distinct
+// from currentJobId, which is the track loaded in the studio: with a queue the
+// two come apart the moment a background import runs while the user browses
+// something else. A background job must not repaint the studio, and opening
+// another track must not break the running import's Cancel button.
+export let foregroundJobId = null;
+
+// `mixerState` is mutated in place (never reassigned). renderMixerRow's
+// closures capture each entry by reference, so on a new job we merge
+// localStorage values into the existing objects rather than replacing them.
+export const mixerState = {};
+
+export let trackIndex = {};
+export let totalDuration = 0;
+export let loopEnabled = false;
+export let loopStart = 0;
+export let loopEnd = 0;
+
+// Selected stems for extraction. The set determines (a) which stem
+// rows render in the studio dashboard after a job completes and (b)
+// which stem audio gets loaded into the multitrack. Backend always
+// runs Demucs on all 6 stems regardless -- filtering happens entirely
+// client-side at render time. Persisted across reloads in localStorage
+// so a user who turns off "Vocals" stays set up that way for the
+// next song.
+const _STEM_SEL_KEY = "stemdeck:selected-stems";
+
+// Start with all stems selected (safe default). The async store load below
+// updates this binding once the store is available; ES module live bindings
+// ensure all importers see the updated value on next read.
+export let selectedStems = new Set(STEM_NAMES);
+
+// Resolves when the persisted stem selection has been loaded from the store.
+// Consumers that need the exact stored selection (e.g. the stem-choice UI)
+// should await this before reading selectedStems.
+export const stemSelectionReady = (async () => {
+  try {
+    const arr = await storeGet(_STEM_SEL_KEY, null);
+    if (Array.isArray(arr) && arr.length > 0) {
+      const valid = arr.filter((n) => STEM_NAMES.includes(n));
+      if (valid.length > 0) {
+        selectedStems = new Set(valid);
+        return;
+      }
+    }
+  } catch (e) { console.warn("[state] failed to load stem selection:", e); }
+  // Keep the all-stems default.
+})();
+
+export function saveSelectedStems() {
+  storeSet(_STEM_SEL_KEY, [...selectedStems]).catch((e) =>
+    console.warn("[state] failed to save stem selection:", e)
+  );
+}
+export function setStemSelected(name, selected) {
+  if (selected) selectedStems.add(name);
+  else selectedStems.delete(name);
+  saveSelectedStems();
+}
+
+// On-demand lead/backing vocal split (#275): "all" (default, plain Vocals
+// lane) or "split" (auto-run the split once the next import finishes).
+// A page-level setting like selectedStems, applied at whatever moment the
+// user submits -- not stored per-job.
+const _VOCAL_SPLIT_MODE_KEY = "stemdeck:vocal-split-mode";
+export let vocalSplitMode = "all";
+export const vocalSplitModeReady = (async () => {
+  try {
+    const v = await storeGet(_VOCAL_SPLIT_MODE_KEY, null);
+    if (v === "split") vocalSplitMode = v;
+  } catch (e) { console.warn("[state] failed to load vocal split mode:", e); }
+})();
+export function setVocalSplitMode(mode) {
+  vocalSplitMode = mode === "split" ? "split" : "all";
+  storeSet(_VOCAL_SPLIT_MODE_KEY, vocalSplitMode).catch((e) =>
+    console.warn("[state] failed to save vocal split mode:", e)
+  );
+}
+
+// Web Audio analysers for live VU meters.
+export let audioContext = null;
+export let masterVolume = 0.5; // mirrored from masterFader.value
+export const trackAnalysers = []; // index → { analyser, data, vuEl }
+export let vuRafId = null;
+
+// Master bus nodes — created once in audio.js, shared across mixer.js.
+// masterBusGain is driven by the master fader; masterLimiter is a
+// transparent brickwall limiter that prevents inter-stem summing clipping.
+export let masterBusGain = null;
+export let masterLimiter = null;
+
+// ─── Setter helpers for mutable state (so other modules can update) ───
+
+export function setEventSource(v) { eventSource = v; }
+export function setMultitrack(v) { multitrack = v; }
+export function setAudioEngine(v) { audioEngine = v; }
+export function setCurrentJobId(v) { currentJobId = v; }
+export function setForegroundJobId(v) { foregroundJobId = v; }
+export function setTrackIndex(v) { trackIndex = v; }
+export function setTotalDuration(v) { totalDuration = v; }
+export function setLoopEnabled(v) { loopEnabled = v; }
+export function setLoopStart(v) { loopStart = v; }
+export function setLoopEnd(v) { loopEnd = v; }
+export function setAudioContext(v) { audioContext = v; }
+export function setMasterVolume(v) { masterVolume = v; }
+export let playbackSpeed = 1.0;
+export function setPlaybackSpeed(v) { playbackSpeed = v; }
+// Horizontal waveform zoom. 1 is the whole track fitted to the panel and is
+// also the floor: there is nothing to see below it, the track is already
+// entirely on screen. Shared state because three modules read it -- transport.js
+// drives it, player.js redraws the bars at the new resolution, and the loop
+// tools are only available at 1.
+export let waveZoom = 1;
+export function setWaveZoom(v) { waveZoom = v; }
+export function setVuRafId(v) { vuRafId = v; }
+export function setMasterBusGain(v) { masterBusGain = v; }
+export function setMasterLimiter(v) { masterLimiter = v; }
+
+// Footer waveform draw callback — set by player.js, called by transport.js
+export let footerWaveDrawFn = null;
+export function setFooterWaveDrawFn(fn) { footerWaveDrawFn = fn; }
+
+// Redraws the overview bars at the current zoom. Registered by player.js, which
+// owns the renderer, and called by transport.js, which owns the zoom. Passed as
+// a callback rather than imported so the two modules do not form a cycle:
+// player.js already imports transport.js.
+export let overviewRerenderFn = null;
+export function setOverviewRerenderFn(fn) { overviewRerenderFn = fn; }
+
+// Puts the song-structure toggle back to off. Registered by main.js, which owns
+// the button, and called by player.js when the studio loads a track. A callback
+// rather than an import because main.js is the entry point: nothing imports it.
+export let autoSectionsResetFn = null;
+export function setAutoSectionsResetFn(fn) { autoSectionsResetFn = fn; }
+
+// Click track. `metronome` is the scheduler bound to the current engine (null
+// when the job has no beat grid or the streaming path is in use); the enabled
+// flag and volume survive track switches so the user's choice sticks.
+export let metronome = null;
+export function setMetronome(v) { metronome = v; }
+export let metronomeEnabled = false;
+export function setMetronomeEnabled(v) { metronomeEnabled = v; }
+export let metronomeVolume = 0.6;
+export function setMetronomeVolume(v) { metronomeVolume = v; }
+// -1 = follow the bar marks the detector found; 0 = no accent; N = accent
+// every N beats from the top of the track.
+export let metronomeBeatsPerBar = -1;
+export function setMetronomeBeatsPerBar(v) { metronomeBeatsPerBar = v; }
+// How the bar subdivides, e.g. [3,2,2] for a 7 played 3+2+2 (issue #595). null
+// means "use the default for this bar length". Only meaningful with an explicit
+// meter: under Auto the bar length can change bar to bar, so each detected bar
+// is grouped by its own default instead.
+export let metronomeGrouping = null;
+export function setMetronomeGrouping(v) {
+  metronomeGrouping = Array.isArray(v) && v.length ? v.slice() : null;
+}
+// Whether the current track's grid carries detected bar marks at all. Without
+// them "Auto" has nothing to follow and behaves as no accent.
+export let metronomeHasBars = false;
+export function setMetronomeHasBars(v) { metronomeHasBars = !!v; }
+// Count me in on play: N bars of click before the audio (issue #269).
+// 0 = off; 1..MAX_COUNT_IN_BARS = that many bars. Independent of the running
+// click track above.
+//
+// Bars rather than a raw click count (#587 asked for "more clicks"): the
+// count-in has to land the song on a downbeat, and computeCountIn derives its
+// clicks as countBars * beatsPerBar. A literal click count would break that
+// alignment in any meter, and in 4/4 the bar counts already give 4, 8, 12 and
+// 16 clicks, which is the span the request was actually about.
+export const MAX_COUNT_IN_BARS = 4;
+export let metronomeCountInBars = 0;
+export function setMetronomeCountInBars(v) {
+  const n = Math.round(Number(v));
+  metronomeCountInBars = Number.isFinite(n) ? Math.max(0, Math.min(MAX_COUNT_IN_BARS, n)) : 0;
+}

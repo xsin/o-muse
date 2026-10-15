@@ -1,0 +1,1672 @@
+import { fmtTime, fmtTickLabel, fmtTimeMs, parseTimecode, storeGet, storeSet } from "./utils.js";
+import { MIN_LOOP_SEC, loopDragResult } from "./loopRegion.js";
+import { tickStepAt } from "./rulerTicks.js";
+import {
+  playBtn, playMiniBtn, stopBtn, loopBtn, timeEl, masterFader,
+  speedBtns,
+  pitchDownBtn,
+  pitchUpBtn,
+  pitchValueEl,
+  pitchResetBtn,
+  pitchWrap,
+  speedWrap,
+  rulerTime, wavesGrid, loopRegionEl, playheadMarker,
+  multitrack, audioEngine, totalDuration, loopEnabled, loopStart, loopEnd, masterVolume,
+  waveScroll, waveCanvas, multitrackContainer,
+  presenceRulerEl, presencePlayheadEl,
+  footerTimeElapsed, footerTimeTotal, footerWaveTicks, npScrubFill, footerWaveDrawFn,
+  loopStartInput, loopEndInput,
+  metroBtn, metroPanel, metroMoreBtn, metroVolEl, metroVolBtn, metroVolPanel, metroVolLabel, metroBarEl, metroBarCustomEl, metroGroupEl, metroNoteEl,
+  metroHalfBtn, metroOneBtn, metroDoubleBtn, metroCountInEl,
+  metronome, metronomeEnabled, metronomeVolume, metronomeBeatsPerBar, metronomeHasBars,
+  metronomeCountInBars, setMetronomeCountInBars,
+  metronomeGrouping, setMetronomeGrouping,
+  setMetronomeHasBars,
+  setMetronomeEnabled, setMetronomeVolume, setMetronomeBeatsPerBar,
+  setLoopEnabled, setLoopStart, setLoopEnd, setMasterVolume, setPlaybackSpeed,
+  waveZoom, setWaveZoom, overviewRerenderFn,
+} from "./state.js";
+import { applyMix, nudgeAllLanePitches, resetAllLanePitches } from "./mixer.js";
+import { isDownbeatIndex, barPositionIndex, getBeats as getGridBeats, getBars as getGridBars } from "./beatgrid.js";
+import { computeCountIn, defaultGrouping, normaliseGrouping } from "./metronome.js";
+import { t, onLanguageChange } from "./i18n.js";
+import { pitchBlockedKey } from "./pitchBus.js";
+import { refitFooter } from "./footerFit.js";
+
+// Zoom range. 1 is the whole track fitted to the panel; there is nothing below
+// it to show, so it is the floor rather than a soft default.
+//
+// The ceiling is set by how many points back the picture, not by taste. A bar
+// occupies OVERVIEW_BAR_SLOT_PX, so a panel of W pixels draws W/5 bars at 1x
+// and Z times that at Zx. Ask for more bars than there are points and the
+// extra ones repeat their neighbours: a fatter picture, not a closer one,
+// which is the exact failure this feature exists to avoid.
+//
+// 10x needs roughly 2400 points for a full-width panel, so _PEAK_POINTS in
+// app/pipeline/collect.py carries 3000. Raise them together or not at all.
+//
+// Tracks separated before that change kept 1500-point peaks.json and repeat
+// bars past 5x on the streaming path. The Web Audio path is unaffected either
+// way: it scans the decoded buffer itself, at whatever this ceiling asks for.
+const WAVE_ZOOM_MIN = 1;
+export const WAVE_ZOOM_MAX = 10;
+// One wheel notch. Multiplicative, so a notch covers the same proportion of the
+// range at 1x as at 4x; linear steps feel fast at the bottom and stuck at the top.
+const WAVE_ZOOM_STEP = 1.18;
+
+// The handles that drag audio out to the OS. Both run an HTML5 drag, and any
+// pointer handler that calls preventDefault on their pointerdown stops that
+// drag before it starts. Excluded from both loop gestures for that reason.
+const DRAG_OUT_SELECTOR = "[data-loop-drag-out], [data-lane-drag-out]";
+// Below this visible width the waveform stops compressing to fit and instead
+// keeps a minimum size, overflowing horizontally so .wave-scroll can scroll.
+const WAVE_MIN_WIDTH = 720;
+// rulerTime is the canonical timeline reference for both click->time
+// and time->pixel mapping. The wave-editor lays the ruler and the
+// waveform body out so they should be horizontally aligned (both gutter
+// 48 px on the left in studio mode), but using one element for both
+// halves of the round-trip eliminates any subtle CSS drift -- clicking
+// "1:00" on the ruler always lands a marker exactly under that tick,
+// regardless of how the waves layer below happens to size itself.
+function rulerRect() {
+  return rulerTime?.getBoundingClientRect() || { left: 0, width: 1 };
+}
+
+function loopOverlayParent() {
+  return document.querySelector(".waves-column") || rulerTime;
+}
+
+function ensureLoopRegionParent() {
+  const parent = loopOverlayParent();
+  if (parent && loopRegionEl.parentElement !== parent) {
+    parent.appendChild(loopRegionEl);
+  }
+}
+
+function timeFromClientX(clientX) {
+  if (!totalDuration) return null;
+  const rect = rulerRect();
+  const x = clientX - rect.left;
+  const frac = Math.max(0, Math.min(1, x / Math.max(1, rect.width)));
+  return frac * totalDuration;
+}
+
+/// The clock that actually owns playback.
+///
+/// engineMode() defaults to "chunked", where audioEngine drives audio and the
+/// multitrack is mounted with url: null for visuals only -- so operating on
+/// `multitrack` directly moves nothing and reads 0. Everything in this module
+/// already went through `audioEngine ?? multitrack`; exporting it stops other
+/// modules re-deriving it and drifting (#515).
+export function transport() {
+  return audioEngine ?? multitrack;
+}
+
+export function setPlayheadTime(sec) {
+  const tx = audioEngine ?? multitrack;
+  if (!tx || !totalDuration) return;
+  const next = Math.max(0, Math.min(totalDuration, sec));
+  tx.setTime(next);
+  updatePlayheadMarker(next);
+  updateFooterTimes(next);
+  updatePresencePlayhead(next);
+}
+
+// Spacing of the timeline's labelled ticks: rulerTicks.js, a module of its own
+// so node can test it. `contentWidthPx` is the width the ticks will actually
+// occupy; omitted (the footer strip) the step is the plain duration-based one.
+// The step the ruler was last built with. buildRuler mutates elements inside
+// .wave-scroll, which is the element the resize observer watches, so rebuilding
+// unconditionally from that callback can re-trigger it. Comparing against this
+// makes the rebuild idempotent: once the ruler matches the width, it settles.
+let _rulerStep = 0;
+
+function tickStep(durationSec, contentWidthPx = 0) {
+  return tickStepAt(durationSec, contentWidthPx, waveZoom);
+}
+
+export function buildRuler(durationSec) {
+  rulerTime.innerHTML = "";
+  wavesGrid.innerHTML = "";
+  const marker = document.createElement("div");
+  marker.className = "playhead-marker";
+  marker.setAttribute("aria-hidden", "true");
+  marker.innerHTML =
+    '<svg viewBox="0 0 10 10" width="10" height="10"><polygon points="0,0 10,0 5,8" fill="#e54e4e"></polygon></svg>';
+  rulerTime.appendChild(marker);
+
+  if (!durationSec || durationSec <= 0) return;
+  // The ruler is width: calc(100% * var(--zoom)), so its own box already is the
+  // zoomed width; no need to recompute it here.
+  const step = tickStep(durationSec, rulerTime.getBoundingClientRect().width);
+  _rulerStep = step;
+  for (let t = 0; t <= durationSec; t += step) {
+    const leftPct = (t / durationSec) * 100;
+    const tick = document.createElement("div");
+    tick.className = "tick";
+    tick.style.left = `${leftPct}%`;
+    tick.innerHTML = `<span class="tick-label">${fmtTickLabel(t)}</span>`;
+    rulerTime.appendChild(tick);
+
+    const grid = document.createElement("div");
+    grid.className = "grid-line";
+    grid.style.left = `${leftPct}%`;
+    wavesGrid.appendChild(grid);
+  }
+}
+
+export function updatePlayheadMarker(currentSec) {
+  if (!playheadMarker || !totalDuration) return;
+  const m = rulerTime.querySelector(".playhead-marker");
+  if (m) {
+    // Position relative to the ruler itself (the marker is a ruler
+    // child) so the playhead always sits exactly under the tick at
+    // the matching time. Use percent instead of px: app-level CSS
+    // zoom scales getBoundingClientRect() values, while left/width
+    // styles are interpreted in unzoomed layout pixels.
+    const pct = Math.max(0, Math.min(100, (currentSec / totalDuration) * 100));
+    m.style.left = `${pct}%`;
+  }
+}
+
+// Mirror the elapsed/total time into the transport-footer's two side
+// labels (which used to show hardcoded "00:00.000" / "03:38.000") and
+// drive the small scrub bar in the now-playing card. Driven from the
+// same wavesurfer "timeupdate" event that already updates #t-time, so
+// every label stays in sync without extra event plumbing.
+//
+// Written only when the text actually changes. This runs every frame while
+// playing, and assigning textContent replaces the text node even when the
+// string is the same, which re-lays out the whole footer control strip sixty
+// times a second to show a number that moves once a second (#633).
+export function updateFooterTimes(currentSec) {
+  if (!totalDuration) return;
+  const elapsed = fmtTime(currentSec);
+  const total = fmtTime(totalDuration);
+  if (footerTimeElapsed && footerTimeElapsed.textContent !== elapsed) footerTimeElapsed.textContent = elapsed;
+  if (footerTimeTotal && footerTimeTotal.textContent !== total) footerTimeTotal.textContent = total;
+  const pct = Math.max(0, Math.min(100, (currentSec / totalDuration) * 100));
+  if (npScrubFill) npScrubFill.style.width = `${pct}%`;
+  footerWaveDrawFn?.(pct / 100);
+}
+
+// Time labels above the footer waveform. Same ticks as the ruler over the
+// lanes, positioned the same way (percent of duration), because the footer
+// strip is now indented to share that ruler's left edge and width.
+export function buildFooterWaveTicks(durationSec) {
+  if (!footerWaveTicks) return;
+  footerWaveTicks.innerHTML = "";
+  if (!durationSec || durationSec <= 0) return;
+  const step = tickStep(durationSec);
+  for (let t = 0; t <= durationSec; t += step) {
+    const tick = document.createElement("div");
+    tick.className = "tick";
+    tick.style.left = `${(t / durationSec) * 100}%`;
+    tick.innerHTML = `<span class="tick-label">${fmtTickLabel(t)}</span>`;
+    footerWaveTicks.appendChild(tick);
+  }
+}
+
+// Build the presence-panel ruler labels from the actual track duration.
+// The HTML ships 8 placeholder <b> tags ("0:00 ... 3:38"); we replace
+// each label's text with a tick at evenly-spaced fractions of the song.
+export function buildPresenceRuler(durationSec) {
+  if (!presenceRulerEl) return;
+  const ticks = presenceRulerEl.querySelectorAll("b");
+  if (!ticks.length) return;
+  if (!durationSec || durationSec <= 0) {
+    for (const t of ticks) t.textContent = "0:00";
+    return;
+  }
+  // 8 ticks -- evenly distribute from 0 to duration.
+  const n = ticks.length;
+  for (let i = 0; i < n; i++) {
+    const frac = i / (n - 1);
+    ticks[i].textContent = fmtTickLabel(frac * durationSec);
+  }
+}
+
+// Move the gold playhead line that overlays the presence-bars panel.
+// Uses left% within the .presence-bars container, which spans the full
+// duration -- matches the ruler ticks above it.
+export function updatePresencePlayhead(currentSec) {
+  if (!presencePlayheadEl) return;
+  if (!totalDuration || totalDuration <= 0) {
+    presencePlayheadEl.classList.add("hidden");
+    return;
+  }
+  const pct = Math.max(0, Math.min(100, (currentSec / totalDuration) * 100));
+  presencePlayheadEl.style.left = `${pct}%`;
+  presencePlayheadEl.classList.remove("hidden");
+}
+
+export function updateLoopRegionVisual() {
+  const regionItem = document.getElementById("t-export-region");
+  const hasRegion = loopEnabled && totalDuration > 0 && loopEnd > loopStart;
+  if (regionItem) regionItem.setAttribute("aria-disabled", String(!hasRegion));
+  // Keep the engine's loop bounds in sync with every loop change (toggle/drag);
+  // the engine wraps playback itself off these values. No-op on streaming path.
+  audioEngine?.setLoop(loopEnabled, loopStart, loopEnd);
+  // Mirror the bounds into the exact-loop text fields (skips fields being edited).
+  syncLoopInputs();
+  if (!loopEnabled || !totalDuration) {
+    loopRegionEl.classList.add("hidden");
+    document.querySelector(".waves-column")?.classList.remove("loop-armed");
+    return;
+  }
+  ensureLoopRegionParent();
+  // Keep the loop overlay in the same normalized timeline coordinate
+  // system as the ruler ticks. Percentages avoid CSS zoom mismatch:
+  // pointer coordinates and getBoundingClientRect() are visual pixels,
+  // but style.left/style.width in px are unzoomed layout pixels.
+  const startPct = Math.max(0, Math.min(100, (loopStart / totalDuration) * 100));
+  const endPct = Math.max(0, Math.min(100, (loopEnd / totalDuration) * 100));
+  loopRegionEl.style.left = `${startPct}%`;
+  loopRegionEl.style.width = `${Math.max(0, endPct - startPct)}%`;
+  loopRegionEl.classList.remove("hidden");
+  positionLaneNuggets(endPct);
+}
+
+// The per-lane drag nuggets live in the waveform overlay, not in the loop
+// region, because each one has to sit on its own lane. They follow the loop
+// through a custom property on the column both subtrees share: one write per
+// loop change rather than one per lane per frame.
+//
+// No minimum size. A width threshold in percent is a threshold on the fraction
+// of the song selected, so a four-bar loop in a four-minute track never meets
+// it and the handles simply never appear -- which is what shipped first and is
+// the whole reason this note exists. Measuring pixels instead would go stale,
+// since zooming changes the rendered width without going through here.
+//
+// On a selection narrower than the nugget it does cover the resize handles,
+// but those extend 7px outside the region on each side (.loop-handle in
+// waves.css), so both stay grabbable from the outer edge.
+function positionLaneNuggets(endPct) {
+  // The column itself, not whatever the region is parented to:
+  // loopOverlayParent falls back to the ruler when the column does not exist
+  // yet, and the class would then be added to one element and removed from
+  // another, leaving the handles showing with no loop behind them.
+  const column = document.querySelector(".waves-column");
+  if (!column) return;
+  column.style.setProperty("--loop-right", `${endPct}%`);
+  column.classList.add("loop-armed");
+}
+
+// Keep the exact-loop text fields in sync with loopStart/loopEnd after any
+// programmatic change (drag, toggle). Never overwrite a field the user is
+// actively editing, and disable both when no track is loaded.
+function syncLoopInputs() {
+  const enabled = totalDuration > 0;
+  for (const [input, value] of [
+    [loopStartInput, loopStart],
+    [loopEndInput, loopEnd],
+  ]) {
+    if (!input) continue;
+    input.disabled = !enabled;
+    if (document.activeElement !== input) input.value = fmtTimeMs(value);
+  }
+}
+
+// Commit a typed loop time. Invalid/out-of-range input reverts the field to the
+// current stored value (self-evident rejection) rather than raising an error;
+// showError lives in the import form and would surface in the wrong place.
+function commitLoopInput(which) {
+  const input = which === "start" ? loopStartInput : loopEndInput;
+  if (!input) return;
+  const revert = () => {
+    input.value = fmtTimeMs(which === "start" ? loopStart : loopEnd);
+  };
+  const parsed = parseTimecode(input.value);
+  if (parsed === null || totalDuration <= 0) {
+    revert();
+    return;
+  }
+  const v = Math.max(0, Math.min(totalDuration, parsed));
+  const start = which === "start" ? v : loopStart;
+  const end = which === "end" ? v : loopEnd;
+  if (end - start < MIN_LOOP_SEC) {
+    revert();
+    return;
+  }
+  setLoopRange(start, end);
+}
+
+/// Arm the loop over an explicit span, and show it.
+///
+/// Callers that already know both bounds all need the same five steps, and the
+/// button class and the overlay redraw are the two that are silent when
+/// forgotten: the loop plays correctly and nothing on screen says it is on.
+/// Returns false when the span is too short to loop, so a caller can say why.
+export function setLoopRange(start, end) {
+  if (!(end - start >= MIN_LOOP_SEC)) return false;
+  setLoopStart(start);
+  setLoopEnd(end);
+  setLoopEnabled(true);
+  loopBtn.classList.add("active");
+  updateLoopRegionVisual();
+  return true;
+}
+
+// Wheel over a loop field nudges it, in seconds on the left of the decimal
+// point and in milliseconds on the right. Two units in one field is the whole
+// point: a loop boundary is chosen coarsely first and then trimmed, and doing
+// the trim by retyping nine characters is why the fields were barely used.
+//
+// A tenth of a second per notch on the seconds half, ten milliseconds on the
+// other. One millisecond per notch would need a hundred notches to cover what
+// the ear can hear.
+const LOOP_WHEEL_SEC = 0.1;
+const LOOP_WHEEL_MS = 0.01;
+
+// Which half of the field the pointer is over. Character-level hit-testing
+// inside an <input> is not reliable across browsers (caretRangeFromPoint
+// returns the element, not an offset inside it), but only one boundary matters
+// here, so measure the text up to the decimal point and compare. The field is
+// centre-aligned and its padding is symmetric, so the border box and the
+// content box share a centre and the string starts halfway through the
+// leftover space.
+let _loopWheelCtx = null;
+function loopWheelUnit(input, clientX) {
+  const value = input.value || "";
+  const dot = value.indexOf(".");
+  if (dot < 0) return "sec";
+  const style = getComputedStyle(input);
+  _loopWheelCtx ||= document.createElement("canvas").getContext("2d");
+  _loopWheelCtx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const full = _loopWheelCtx.measureText(value).width;
+  const throughDot = _loopWheelCtx.measureText(value.slice(0, dot + 1)).width;
+  const rect = input.getBoundingClientRect();
+  const textStart = rect.left + (rect.width - full) / 2;
+  return clientX >= textStart + throughDot ? "ms" : "sec";
+}
+
+// Same rules as a typed commit: clamp to the track, never let the two bounds
+// cross inside MIN_LOOP_SEC. A nudge that would break either is dropped rather
+// than clamped to the limit, so holding the wheel against the end of a track
+// does not silently drag the other bound along.
+function nudgeLoopInput(which, direction, unit) {
+  if (totalDuration <= 0) return;
+  const step = unit === "ms" ? LOOP_WHEEL_MS : LOOP_WHEEL_SEC;
+  const current = which === "start" ? loopStart : loopEnd;
+  const next = Math.round((current + direction * step) * 1000) / 1000;
+  if (next < 0 || next > totalDuration) return;
+  const start = which === "start" ? next : loopStart;
+  const end = which === "end" ? next : loopEnd;
+  setLoopRange(start, end);
+}
+
+function wireLoopInputs() {
+  for (const [input, which] of [
+    [loopStartInput, "start"],
+    [loopEndInput, "end"],
+  ]) {
+    if (!input) continue;
+    input.addEventListener("blur", () => commitLoopInput(which));
+    input.addEventListener(
+      "wheel",
+      (e) => {
+        if (input.disabled || totalDuration <= 0) return;
+        // The lanes zoom on wheel (#493) and the page scrolls; neither is what
+        // a wheel over a numeric field is asking for.
+        e.preventDefault();
+        e.stopPropagation();
+        nudgeLoopInput(which, e.deltaY < 0 ? 1 : -1, loopWheelUnit(input, e.clientX));
+        // syncLoopInputs leaves a focused field alone so it cannot overwrite
+        // what is being typed. A wheel is not typing, so write it back here.
+        input.value = fmtTimeMs(which === "start" ? loopStart : loopEnd);
+      },
+      { passive: false }
+    );
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        input.value = fmtTimeMs(which === "start" ? loopStart : loopEnd);
+        input.blur();
+      }
+    });
+  }
+  syncLoopInputs();
+}
+
+// Standard DAW transport state machine:
+//   [stopped]  (paused at start)  ─Play→  [playing]
+//        ↑                                  ↓ Play
+//      Stop                                [paused]  (paused mid-track)
+//                       Stop ↓
+//                          [stopped]
+//
+// Play button is a Play/Pause toggle. Stop both pauses and returns the
+// playhead to 0 (or loopStart if loop is on). Visual state is driven
+// from the multitrack lifecycle events in player.js (mt.on play/pause/
+// timeupdate) — click handlers only mutate the transport, never the
+// button's CSS class. That way manual seeks (e.g. clicking the ruler)
+// keep the button states in sync without extra plumbing.
+// WKWebView (Tauri desktop) has small audio buffers. After a seek, all
+// audio elements drop their buffers and issue new range requests simultaneously.
+// Calling play() before they reach HAVE_FUTURE_DATA (readyState >= 3) causes
+// choppiness. Wait for all elements to be ready, with a hard 1.5 s fallback so
+// the user is never stuck. Desktop browsers buffer aggressively enough that
+// this wait is skipped entirely (readyState is already >= 3 by the time play
+// is pressed after a seek).
+function _playWhenReady() {
+  if (!multitrack) return;
+  const inTauri = Boolean(window.__TAURI__?.core?.invoke);
+  if (!inTauri) { multitrack.play(); return; }
+
+  const audios = (multitrack.audios ?? [])
+    .filter((a) => a instanceof HTMLMediaElement && a.src);
+  const notReady = audios.filter((a) => a.readyState < 3);
+  if (!notReady.length) { multitrack.play(); return; }
+
+  let fired = false;
+  const fire = () => { if (!fired && multitrack && !multitrack.isPlaying()) { fired = true; multitrack.play(); } };
+  const waits = notReady.map((a) => new Promise((res) => {
+    if (a.readyState >= 3) { res(); return; }
+    const onReady = () => { a.removeEventListener("canplay", onReady); res(); };
+    a.addEventListener("canplay", onReady);
+  }));
+  Promise.all(waits).then(fire);
+  window.setTimeout(fire, 1500);
+}
+
+// The live beat grid to count against: the editor's copy when it holds one
+// (reflects unsaved drags), else the grid last handed to the metronome UI.
+function _currentGrid() {
+  const edited = getGridBeats?.() ?? [];
+  if (edited.length) return { beats: edited, bars: getGridBars?.() ?? [] };
+  if (_lastGrid?.beats?.length) return { beats: _lastGrid.beats, bars: _lastGrid.bars ?? [] };
+  return null;
+}
+
+// Bumped by every pause and stop, so a count-in still waiting for its start
+// to be scheduled knows it has been overtaken and does not sound afterwards.
+let _countInGeneration = 0;
+
+function _dropCountIn() {
+  _countInGeneration++;
+  metronome?.cancelCountIn?.();
+}
+
+// Arm a count-in when it is enabled and the engine + grid can support one.
+// Starts the audio late (engine.play(leadIn)) and schedules the count clicks in
+// the gap, whether or not the running click is on. Returns true when it took
+// over starting playback, so the caller does not also start it immediately.
+function _armCountIn(eng, startPos) {
+  if (metronomeCountInBars < 1 || !eng?.supportsCountIn || !metronome) return false;
+  const grid = _currentGrid();
+  if (!grid) return false;
+  const { leadIn, clicks } = computeCountIn(grid.beats, grid.bars, {
+    countBars: metronomeCountInBars,
+    multiplier: metronome.getMultiplier?.() ?? 1,
+    accentMode: metronomeBeatsPerBar,
+    groups: metronomeGrouping,
+    start: startPos,
+  });
+  if (leadIn <= 0 || !clicks.length) return false;
+  // Clicks sit in source time, leading into the start position: the last lands
+  // one beat before the audio, so the song enters on the next downbeat.
+  const sourceClicks = clicks.map((c) => ({ time: startPos - leadIn + c.offset, accent: c.accent }));
+  // The clicks can only be placed once the engine's clock describes this
+  // start, and on the streaming engine that can be after a fetch. Scheduling
+  // them as soon as play() returned used the previous start's clock and put
+  // every one in the past, so only the first play of a track ever counted in
+  // (#655). Wait for the start, and drop the count-in if a pause or stop got
+  // there first.
+  // The metronome is held as it is now: if the track changes while the start
+  // is still waiting, the live binding points at the next track's click, and
+  // this one's clicks belong to this one. A destroyed metronome ignores them.
+  const generation = ++_countInGeneration;
+  const clickTrack = metronome;
+  eng.play(leadIn).then((started) => {
+    if (!started || generation !== _countInGeneration) return;
+    clickTrack.playCountIn(sourceClicks);
+  });
+  return true;
+}
+
+export function togglePlayPause() {
+  const eng = audioEngine;
+  const tx = eng ?? multitrack;
+  if (!tx) return;
+  if (tx.isPlaying()) {
+    tx.pause();
+    _dropCountIn(); // drop a count-in if paused before the audio enters
+    // The engine emits no play/pause events (the multitrack stays silent), so
+    // the play-button visual that the ws "pause" handler normally toggles must
+    // be driven here directly.
+    if (eng) playBtn.classList.remove("playing");
+    return;
+  }
+  const ctx = tx.audioContext;
+  // Safari requires play() to be called synchronously within the user-gesture
+  // handler. Resume the AudioContext fire-and-forget so the context becomes
+  // live, then call play() immediately on the same tick.
+  if (ctx && ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  // Snap playhead to loopStart on play (DAW convention).
+  if (loopEnabled && totalDuration > 0) {
+    tx.setTime(loopStart);
+  }
+  if (eng) {
+    // Match the engine's own end-of-track reset so the count-in leads into the
+    // same position playback will actually start from.
+    let startPos = eng.getCurrentTime?.() ?? 0;
+    if (totalDuration > 0 && startPos >= totalDuration) startPos = 0;
+    if (!_armCountIn(eng, startPos)) eng.play();
+    playBtn.classList.add("playing");
+    stopBtn.classList.remove("stopped");
+  } else {
+    _playWhenReady();
+  }
+}
+
+export function stopTransport() {
+  const eng = audioEngine;
+  const tx = eng ?? multitrack;
+  if (!tx) return;
+  tx.pause();
+  _dropCountIn(); // a count-in in progress must not outlive Stop
+  tx.setTime(loopEnabled ? loopStart : 0); // engine: setTime → onTime → stop visual
+  if (eng) playBtn.classList.remove("playing");
+}
+
+export function toggleLoop() {
+  setLoopEnabled(!loopEnabled);
+  loopBtn.classList.toggle("active", loopEnabled);
+  updateLoopRegionVisual();
+}
+
+// Click-drag on the timeline ruler or waveform body to define the loop
+// region. Drag direction doesn't matter -- start and end get sorted.
+// Adjust an existing loop region rather than redrawing it (#538, discussion
+// #507).
+//
+// Three gestures on one element:
+//   - a handle at either edge moves only that edge, so a loop can be tightened
+//     one side at a time instead of being re-measured from scratch;
+//   - the body moves both edges together, preserving length, so a loop found by
+//     ear can be slid;
+//   - a press that does not move is still a seek, which is what the region did
+//     before it became interactive, and losing that would be a regression for
+//     anyone who just wants to click inside their selection.
+//
+// Pointer events throughout, so this works with touch and pen as well as a
+// mouse.
+function wireLoopRegionAdjust() {
+  if (!loopRegionEl) return;
+
+  let mode = null; // "start" | "end" | "move"
+  let pointerId = null;
+  let grabTime = 0; // where in the track the pointer went down
+  let fromStart = 0;
+  let fromEnd = 0;
+  let moved = false;
+
+  const apply = (t) => {
+    const next = loopDragResult({
+      mode,
+      pointerTime: t,
+      grabTime,
+      fromStart,
+      fromEnd,
+      duration: totalDuration,
+    });
+    setLoopStart(next.start);
+    setLoopEnd(next.end);
+    updateLoopRegionVisual();
+  };
+
+  loopRegionEl.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || !totalDuration) return;
+    // Starting a pointer-drag from the same gesture would move the region
+    // while it is being dragged out.
+    if (e.target.closest(DRAG_OUT_SELECTOR)) return;
+    const t = timeFromClientX(e.clientX);
+    if (t === null) return;
+    mode = e.target.closest("[data-loop-handle]")?.dataset.loopHandle ?? "move";
+    pointerId = e.pointerId;
+    grabTime = t;
+    fromStart = loopStart;
+    fromEnd = loopEnd;
+    moved = false;
+    loopRegionEl.classList.add("dragging");
+    loopRegionEl.setPointerCapture(e.pointerId);
+    // Stops wireLoopDrag's surface handler starting a fresh selection
+    // underneath this one.
+    e.stopPropagation();
+    e.preventDefault();
+  });
+
+  loopRegionEl.addEventListener("pointermove", (e) => {
+    if (mode === null || e.pointerId !== pointerId) return;
+    const t = timeFromClientX(e.clientX);
+    if (t === null) return;
+    // Same threshold the create-drag uses to tell a click from a drag.
+    if (Math.abs(t - grabTime) >= MIN_LOOP_SEC) moved = true;
+    apply(t);
+    e.preventDefault();
+  });
+
+  const finish = (e) => {
+    if (mode === null || e.pointerId !== pointerId) return;
+    const wasMove = mode === "move";
+    mode = null;
+    pointerId = null;
+    loopRegionEl.classList.remove("dragging");
+    if (!moved && wasMove) {
+      // A press with no travel: seek, exactly as clicking here did before the
+      // region took pointer events.
+      setPlayheadTime(grabTime);
+    }
+    syncLoopInputs();
+  };
+
+  loopRegionEl.addEventListener("pointerup", finish);
+  loopRegionEl.addEventListener("pointercancel", finish);
+}
+
+// Tiny drags are treated as clicks and seek the playhead instead.
+function wireLoopDrag() {
+  let dragging = false;
+  let dragStartTime = 0;
+  let activePointerId = null;
+  let moved = false;
+
+  const startDrag = (e, surface) => {
+    // .loop-region covers the mix grip, which lives inside it. The lane
+    // nuggets sit in the waveform overlay instead, so they need naming: without
+    // this, grabbing one starts a new selection and preventDefault below kills
+    // the drag-out before dragstart ever fires.
+    if (e.button !== 0 || e.target.closest(".loop-region")) return;
+    if (e.target.closest(DRAG_OUT_SELECTOR)) return;
+    const t = timeFromClientX(e.clientX);
+    if (t === null) return;
+    dragging = true;
+    activePointerId = e.pointerId;
+    moved = false;
+    dragStartTime = t;
+    setLoopStart(t);
+    setLoopEnd(t);
+    setLoopEnabled(true);
+    loopBtn.classList.add("active");
+    updateLoopRegionVisual();
+    surface.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  const moveDrag = (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
+    const t = timeFromClientX(e.clientX);
+    if (t === null) return;
+    if (Math.abs(t - dragStartTime) >= MIN_LOOP_SEC) moved = true;
+    if (t < dragStartTime) {
+      setLoopStart(t);
+      setLoopEnd(dragStartTime);
+    } else {
+      setLoopStart(dragStartTime);
+      setLoopEnd(t);
+    }
+    updateLoopRegionVisual();
+  };
+
+  const finishDrag = (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
+    dragging = false;
+    activePointerId = null;
+    const clicked = !moved || loopEnd - loopStart < MIN_LOOP_SEC;
+    if (clicked) {
+      setLoopEnabled(false);
+      loopBtn.classList.remove("active");
+      updateLoopRegionVisual();
+      setPlayheadTime(dragStartTime);
+    }
+  };
+
+  const wavesColumn = document.querySelector(".waves-column");
+  const surfaces = [rulerTime, wavesColumn].filter(Boolean);
+  for (const surface of surfaces) {
+    surface.addEventListener("pointerdown", (e) => {
+      if (surface === rulerTime && e.target !== rulerTime) return;
+      startDrag(e, surface);
+    });
+    surface.addEventListener("pointermove", moveDrag);
+    surface.addEventListener("pointerup", finishDrag);
+    surface.addEventListener("pointercancel", finishDrag);
+  }
+}
+
+// ─── Zoom ───
+//
+// Single CSS variable `--zoom` on .wave-canvas drives the visual width
+// (canvas = 100% * zoom). Multitrack's pxPerSec is set to match so its
+// internal canvases stay the exact same pixel width as the canvas; that
+// way the bundle never adds its own internal horizontal scroll, which
+// historically broke alignment with our ruler/loop overlay.
+//
+// All percentage-positioned children (ruler ticks, playhead, grid lines,
+// loop region) automatically stretch with the canvas, so the loop drag
+// math stays correct without any per-element width logic.
+
+// Keep the header ruler horizontally aligned with the (possibly wider, scrolled)
+// waveform body. The ruler lives outside .wave-scroll, so translate it by the
+// same scrollLeft; .daw-ruler-area uses overflow-x: clip to hide the spill while
+// leaving the vertical playhead line (overflow-y: visible) intact.
+export function syncRulerScroll() {
+  if (!waveScroll) return;
+  const shift = `translateX(${-waveScroll.scrollLeft}px)`;
+  if (rulerTime) rulerTime.style.transform = shift;
+  // The section ribbon is the same kind of strip and needs the same treatment:
+  // it sits outside .wave-scroll, is widened by the same --zoom, and is clipped
+  // by its own area. Queried here rather than imported from sections.js, which
+  // deliberately depends on nothing but i18n -- adding transport to its imports
+  // breaks tests/js/sections.test.mjs at import time, because state.js touches
+  // document at module scope and that test installs its stub afterwards.
+  const sectionsTrack = document.getElementById("daw-sections-track");
+  if (sectionsTrack) sectionsTrack.style.transform = shift;
+  // The lyrics lane (lyricsLane.js), the same kind of strip again.
+  const lyricsTrack = document.getElementById("daw-lyrics-track");
+  if (lyricsTrack) lyricsTrack.style.transform = shift;
+}
+
+export function applyWaveZoom() {
+  const lanes = document.getElementById("lanes") || waveCanvas;
+  const wavesColumn = document.querySelector(".waves-column");
+  if (wavesColumn) {
+    lanes?.style.setProperty("--wave-playhead-h", `${wavesColumn.clientHeight}px`);
+  }
+  if (multitrack && totalDuration > 0 && waveScroll) {
+    const baseWidth = waveScroll.clientWidth;
+    if (baseWidth > 0) {
+      // Two separate reasons the content can be wider than the viewport, and
+      // they multiply rather than compete: the user's zoom, and the floor that
+      // stops the whole track compressing into a sliver on a narrow window.
+      const contentWidth = Math.max(baseWidth * waveZoom, WAVE_MIN_WIDTH);
+      const zoom = contentWidth / baseWidth;
+      // Widen the container via --zoom FIRST. Then, after the browser has
+      // reflowed it, zoom WaveSurfer to fit the container's *actual* width.
+      // Measuring post-reflow avoids the resize race where WaveSurfer renders
+      // wider than its container and exposes its own (unstyled, light) internal
+      // horizontal scrollbar — the only horizontal scroll must come from the
+      // outer .wave-scroll, which also keeps the ruler/playhead aligned.
+      lanes?.style.setProperty("--zoom", String(zoom));
+      requestAnimationFrame(() => {
+        if (!multitrack || totalDuration <= 0) return;
+        const w = multitrackContainer?.clientWidth || contentWidth;
+        try { multitrack.zoom(w / totalDuration); } catch { /* ignore -- pre-canplay */ }
+        // Redraw the SVG bars against the width the reflow actually produced.
+        // The bars are 1 viewBox unit each, so leaving the old count in place
+        // would stretch every bar by the zoom factor: same waveform, fatter
+        // strokes. Redrawing keeps them 3px wide and spends the extra width on
+        // detail instead, which is the whole point of zooming in.
+        overviewRerenderFn?.();
+        syncRulerScroll();
+      });
+    }
+  }
+}
+
+/**
+ * Set the zoom, keeping the time under `anchorClientX` where it is.
+ *
+ * Without the anchor the view jumps to wherever scrollLeft happened to be, and
+ * zooming toward a specific bar becomes a game of chase-the-scrollbar.
+ */
+export function setWaveZoomLevel(next, anchorClientX = null) {
+  const clamped = Math.min(WAVE_ZOOM_MAX, Math.max(WAVE_ZOOM_MIN, next));
+  if (Math.abs(clamped - waveZoom) < 1e-4) return false;
+  // Which content pixel the anchor is on, before anything moves.
+  const rect = waveScroll?.getBoundingClientRect();
+  const offsetX = anchorClientX !== null && rect
+    ? Math.min(rect.width, Math.max(0, anchorClientX - rect.left))
+    : (waveScroll ? waveScroll.clientWidth / 2 : 0);
+  const contentX = (waveScroll?.scrollLeft ?? 0) + offsetX;
+  // Measured, not derived from the zoom ratio. WAVE_MIN_WIDTH floors the
+  // content width, so on a window narrower than 720px a zoom step can widen the
+  // content by less than its own factor -- or not at all -- and scaling by the
+  // ratio would slide the anchor out from under the pointer.
+  const beforeWidth = waveCanvas?.getBoundingClientRect().width || 0;
+
+  setWaveZoom(clamped);
+  applyWaveZoom();
+  const afterWidth = waveCanvas?.getBoundingClientRect().width || beforeWidth;
+  const growth = beforeWidth > 0 ? afterWidth / beforeWidth : 1;
+  // Everything positioned against the timeline is laid out again at the new
+  // width: the ruler because its ticks are now the wrong distance apart for the
+  // detail on screen, the playhead and the loop region because buildRuler
+  // rebuilds the elements they live in.
+  buildRuler(totalDuration);
+  // buildRuler re-creates the marker element, so it comes back at 0. Put it
+  // back where the transport actually is -- but only if something can say;
+  // defaulting to 0 would yank the playhead to the start of the track.
+  const now = (audioEngine ?? multitrack)?.getCurrentTime?.();
+  if (typeof now === "number") updatePlayheadMarker(now);
+  updateLoopRegionVisual();
+
+  if (waveScroll) {
+    // The same content pixel after the widening, minus where it sits in the
+    // viewport, is the scroll offset that leaves it under the pointer.
+    const target = contentX * growth - offsetX;
+    waveScroll.scrollLeft = Math.max(0, target);
+    syncRulerScroll();
+  }
+  return true;
+}
+
+export function resetWaveZoom() {
+  return setWaveZoomLevel(WAVE_ZOOM_MIN);
+}
+
+function wireZoomButtons() {
+  if (waveScroll) {
+    let rafId = null;
+    const ro = new ResizeObserver(() => {
+      if (!multitrack || totalDuration <= 0) return;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        applyWaveZoom();
+        // Tick spacing is chosen from the content width, so a resize can leave
+        // the ruler at the density the old width called for. Rebuild only when
+        // the step it would pick has actually changed: buildRuler writes inside
+        // the observed element, so rebuilding every time would feed the
+        // observer its own output.
+        const next = tickStep(totalDuration, rulerTime?.getBoundingClientRect().width || 0);
+        if (next !== _rulerStep) {
+          buildRuler(totalDuration);
+          updateLoopRegionVisual();
+        }
+      });
+    });
+    ro.observe(waveScroll);
+  }
+  if (waveScroll) {
+    waveScroll.addEventListener("wheel", (e) => {
+      if (totalDuration <= 0) return;
+      // Shift is the pan gesture, and a trackpad's horizontal axis reports as
+      // deltaX with no modifier. Both mean "move along the track", so neither
+      // should change the zoom.
+      if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        if (waveScroll.scrollWidth <= waveScroll.clientWidth) return;
+        e.preventDefault();
+        // Whichever axis the gesture actually carried. Shift-wheel puts it on
+        // deltaY, a trackpad swipe on deltaX, and shift plus a swipe on deltaX
+        // with deltaY at zero.
+        waveScroll.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        syncRulerScroll();
+        return;
+      }
+      if (!e.deltaY) return;
+      // deltaMode 1 is lines and 2 is pages; both deliver far smaller numbers
+      // than pixels, so normalise to notches rather than scaling by deltaY.
+      const notches = Math.max(1, Math.min(3, Math.round(Math.abs(e.deltaY) / 100) || 1));
+      const factor = WAVE_ZOOM_STEP ** (e.deltaY < 0 ? notches : -notches);
+      const changed = setWaveZoomLevel(waveZoom * factor, e.clientX);
+      // Only swallow the event when it did something. At either end of the
+      // range the page should still get its scroll rather than feel dead.
+      if (changed) e.preventDefault();
+    }, { passive: false });
+    waveScroll.addEventListener("scroll", syncRulerScroll, { passive: true });
+  }
+  applyWaveZoom();
+}
+
+// Keep the mixer column and the waveform area scrolled in lockstep so stem
+// controls stay aligned with their lanes when the stack overflows (#159).
+function wireLaneScrollSync() {
+  const mixer = document.getElementById("mixer");
+  if (!mixer || !waveScroll) return;
+  // Mirror scrollTop between the two panes by assigning only when the values
+  // differ. The echo stops on its own (once equal, the partner's handler is a
+  // no-op), so no reentrancy guard / rAF is needed — that frame-delayed guard
+  // was what made inertial scrolling stutter (#163).
+  const link = (src, dst) =>
+    src.addEventListener("scroll", () => {
+      if (dst.scrollTop !== src.scrollTop) dst.scrollTop = src.scrollTop;
+    }, { passive: true });
+  link(mixer, waveScroll);
+  link(waveScroll, mixer);
+}
+
+// ─── Wire transport buttons ───
+
+export function wireTransportButtons() {
+  // Inert until a track with a beat grid arrives. The markup ships the panel
+  // greyed so there is no flash of live-looking controls before this runs, but
+  // greyed is only a look: this is what actually makes them unusable, and what
+  // a screen reader is told.
+  setMetroOptionsAvailable(false);
+  playBtn.addEventListener("click", togglePlayPause);
+  playMiniBtn?.addEventListener("click", togglePlayPause);
+  stopBtn.addEventListener("click", stopTransport);
+  loopBtn.addEventListener("click", toggleLoop);
+  wireLoopDrag();
+  wireLoopRegionAdjust();
+  wireLoopInputs();
+  wireZoomButtons();
+  wireLaneScrollSync();
+  masterFader?.addEventListener("input", () => {
+    setMasterVolume(parseFloat(masterFader.value));
+    applyMix();
+  });
+  masterFader?.addEventListener("dblclick", () => {
+    masterFader.value = "0.5";
+    setMasterVolume(0.5);
+    applyMix();
+  });
+  wireSpeedControl();
+  wireMetronomeControl();
+  wirePitchControl();
+}
+
+// Three buttons rather than a dial -- practice speeds for slowing a part
+// down, not a general-purpose tempo control (#269 follow-up): half speed,
+// a slow speed the player sets, and normal.
+//
+// The slow one is set by the player (#701): scroll over it, or press the up
+// and down arrow keys on it, to move it a hundredth at a time between
+// SLOW_MIN and SLOW_MAX. Some fills want 0.75x, some only a nudge to 0.9x.
+// It was fixed at 0.75x when the stretch was WSOLA, whose artefacts made
+// anything slower hard to follow (#433); Signalsmith Stretch (#729) holds up
+// further down, so the floor is 0.5x. Kept between sessions, and the footer
+// keeps its width: the button only ever reads "0.xxx".
+const SLOW_MIN = 0.5;
+const SLOW_MAX = 0.99;
+const SLOW_DEFAULT = 0.75;
+const _SLOW_SPEED_KEY = "stemdeck:slow-speed";
+// A turn of the wheel fires many events; the rate itself is applied once
+// they stop, since every change of rate flushes the tempo stage.
+const SLOW_APPLY_DELAY_MS = 150;
+
+const clampSlow = (rate) => Math.round(Math.min(SLOW_MAX, Math.max(SLOW_MIN, rate)) * 100) / 100;
+let _slowRate = SLOW_DEFAULT;
+let _slowApplyTimer = 0;
+const halfBtn = () => document.getElementById("t-speed-05");
+const slowBtn = () => document.getElementById("t-speed-075");
+const normalBtn = () => document.getElementById("t-speed-1");
+
+function paintSlowButton() {
+  const btn = slowBtn();
+  if (!btn) return;
+  btn.dataset.speed = String(_slowRate);
+  btn.textContent = `${_slowRate.toFixed(2)}x`;
+  btn.title = t("speed.slowTitle");
+}
+
+/**
+ * Play at the speed of `btn`, one of the three buttons: half, the slow speed,
+ * or normal. Without one, anything under 1 is the slow button's. The button
+ * pressed is the one lit, so half speed and a slow speed set to 0.50x never
+ * light together.
+ */
+function applySpeed(rate, btn = null) {
+  const pressed = btn ?? (rate >= 1 ? normalBtn() : slowBtn());
+  const applied = pressed === halfBtn() ? 0.5 : pressed === slowBtn() ? _slowRate : 1;
+  setPlaybackSpeed(applied);
+  for (const b of speedBtns) {
+    if (!b) continue;
+    const on = b === pressed;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+  }
+  audioEngine?.setPlaybackRate?.(applied);
+  if (multitrack) {
+    for (const a of (multitrack.audios ?? [])) {
+      try { a.playbackRate = applied; } catch { /* noop */ }
+    }
+  }
+}
+
+/** Move the slow speed by `steps` hundredths, and play at it. */
+function nudgeSlowSpeed(steps) {
+  const next = clampSlow(_slowRate + steps / 100);
+  if (next === _slowRate) return;
+  _slowRate = next;
+  paintSlowButton();
+  storeSet(_SLOW_SPEED_KEY, _slowRate).catch((e) => console.warn("[transport] failed to save the slow speed:", e));
+  clearTimeout(_slowApplyTimer);
+  _slowApplyTimer = setTimeout(() => applySpeed(_slowRate, slowBtn()), SLOW_APPLY_DELAY_MS);
+}
+
+
+// ── Transpose (#245) ────────────────────────────────────────────────────────
+//
+// Semitones, not a continuous dial, for the same reason the speed control uses
+// presets: this is for moving a backing track into a singer's range, and every
+// useful destination is a whole semitone away.
+//
+// Capped at a fifth rather than an octave. The worklet stretches then resamples,
+// and past roughly five semitones that starts to be audible on sustained
+// material. A control whose extremes sound broken is worse than a narrower one
+// that always sounds right.
+const PITCH_MIN = -6;
+const PITCH_MAX = 6;
+
+let _pitchSemitones = 0;
+let _pitchAvailable = false;
+
+/** Redraw the global key readout and its buttons. Touches no lane. */
+function renderPitch() {
+  if (pitchValueEl) {
+    // Signed, so "+2" and "-2" are distinguishable at a glance; bare "0" for
+    // the default rather than a redundant "+0".
+    pitchValueEl.textContent = _pitchSemitones > 0 ? `+${_pitchSemitones}` : String(_pitchSemitones);
+    pitchValueEl.classList.toggle("active", _pitchSemitones !== 0);
+  }
+  // A stepper that silently stops responding reads as broken, so say which end
+  // has been reached rather than only going inert.
+  if (pitchDownBtn) pitchDownBtn.disabled = !_pitchAvailable || _pitchSemitones <= PITCH_MIN;
+  if (pitchUpBtn) pitchUpBtn.disabled = !_pitchAvailable || _pitchSemitones >= PITCH_MAX;
+  if (pitchResetBtn) pitchResetBtn.disabled = !_pitchAvailable;
+
+  // Three dead buttons still wearing "Transpose up a semitone" explain nothing.
+  // The reason lives on the group, because a disabled button does not reliably
+  // fire the pointer events a tooltip needs.
+  if (pitchWrap) {
+    if (_pitchAvailable) pitchWrap.removeAttribute("title");
+    else pitchWrap.title = t(pitchBlockedKey());
+  }
+  // Without the pitch stage the sources resample instead, so speed drags the
+  // key with it. That is the one degradation here that is otherwise silent:
+  // the control still works, it just quietly does something else (#552).
+  if (speedWrap) {
+    if (_pitchAvailable) speedWrap.removeAttribute("title");
+    else speedWrap.title = t("speed.pitchFollows");
+  }
+}
+
+/**
+ * Move the global key, and every lane with it.
+ *
+ * The lanes carry absolute keys, so this applies the *change* rather than the
+ * new value: a lane deliberately put a third above the rest stays a third above
+ * the rest when the whole track moves. Overriding instead would flatten every
+ * per-lane decision the moment the global control was touched.
+ */
+function applyPitch(semitones) {
+  const clamped = Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.round(semitones)));
+  const delta = clamped - _pitchSemitones;
+  _pitchSemitones = clamped;
+  renderPitch();
+  if (delta !== 0) nudgeAllLanePitches(delta);
+}
+
+/**
+ * Clear the readout when a track is torn down or swapped.
+ *
+ * Deliberately does not touch the lanes: their keys are saved per track and are
+ * about to be reloaded from the store for whatever is being opened.
+ */
+export function resetPitch() {
+  _pitchSemitones = 0;
+  renderPitch();
+}
+
+/** The user's reset: the global key and every lane, back to the original. */
+export function resetAllKeys() {
+  _pitchSemitones = 0;
+  resetAllLanePitches();
+  renderPitch();
+}
+
+export function updatePitchAvailability(available) {
+  _pitchAvailable = available === true;
+  if (!_pitchAvailable && _pitchSemitones !== 0) _pitchSemitones = 0;
+  renderPitch();
+}
+
+function wirePitchControl() {
+  pitchDownBtn?.addEventListener("click", () => applyPitch(_pitchSemitones - 1));
+  pitchUpBtn?.addEventListener("click", () => applyPitch(_pitchSemitones + 1));
+  pitchResetBtn?.addEventListener("click", () => resetAllKeys());
+}
+
+export function resetSpeed() {
+  applySpeed(1.0);
+}
+
+function wireSpeedControl() {
+  for (const btn of speedBtns) {
+    btn?.addEventListener("click", () => applySpeed(parseFloat(btn.dataset.speed), btn));
+  }
+  const slow = slowBtn();
+  if (!slow) return;
+  paintSlowButton();
+  onLanguageChange(paintSlowButton);
+  slow.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    if (e.deltaY) nudgeSlowSpeed(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+  slow.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    nudgeSlowSpeed(e.key === "ArrowUp" ? 1 : -1);
+  });
+  storeGet(_SLOW_SPEED_KEY, null).then((saved) => {
+    if (typeof saved !== "number" || !Number.isFinite(saved)) return;
+    const wasSlow = slow.classList.contains("active");
+    _slowRate = clampSlow(saved);
+    paintSlowButton();
+    if (wasSlow) applySpeed(_slowRate, slow);
+  }).catch(() => {});
+}
+
+// ─── Click track ────────────────────────────────────────────
+
+const _METRO_PREFS_KEY = "stemdeck:metronome";
+
+function _saveMetroPrefs() {
+  storeSet(_METRO_PREFS_KEY, {
+    enabled: metronomeEnabled,
+    volume: metronomeVolume,
+    beatsPerBar: metronomeBeatsPerBar,
+    grouping: metronomeGrouping,
+    countInBars: metronomeCountInBars,
+  }).catch((e) => console.warn("[transport] failed to save metronome prefs:", e));
+}
+
+/**
+ * Push the current accent choice into the metronome.
+ *
+ * "Auto" defers to the bar marks the detector found, which is the only mode
+ * that can be right on a track whose meter changes -- a fixed count from the
+ * top of the track cannot. The explicit choices override it, and exist because
+ * detection can be wrong and because some players want no accent at all.
+ */
+export function applyMetronomeAccent() {
+  if (!metronome) return;
+  // Grouping is only applied to an explicit meter; under bar marks each bar is
+  // grouped by its own length instead (#595), which is why the position lookup
+  // goes across whether or not the user has set a grouping.
+  metronome.setGrouping?.(metronomeGrouping);
+  if (metronomeBeatsPerBar < 0 && metronomeHasBars) {
+    metronome.setDownbeatFn?.(isDownbeatIndex);
+    metronome.setBarPositionFn?.(barPositionIndex);
+  } else {
+    metronome.setDownbeatFn?.(null);
+    metronome.setBarPositionFn?.(null);
+    metronome.setBeatsPerBar?.(Math.max(0, metronomeBeatsPerBar));
+  }
+}
+
+function _renderMetroVolume() {
+  const pct = `${Math.round(metronomeVolume * 100)}%`;
+  if (metroVolEl) metroVolEl.value = String(metronomeVolume);
+  // Readout sits with the fader, and on the button that opens it. A click
+  // level you can only learn by moving the fader is one you cannot match
+  // between sessions, and the button is the part that is always on screen.
+  if (metroVolLabel) metroVolLabel.textContent = pct;
+  // No data-i18n-title on the button: this title carries the live level, and
+  // the generic translation pass would flatten it back to a static string on a
+  // language switch. Re-derived from the same listener pattern main.js uses
+  // for the export label.
+  if (metroVolBtn) metroVolBtn.title = t("click.volumeTitle", { pct });
+}
+
+// Show the meter in the select when it is one of the presets, otherwise select
+// "Custom..." and reveal the number input holding the actual value. Keeping the
+// two in sync in one place means a value restored from prefs, a preset pick and
+// a typed number all land the same way.
+function _renderMetroBar() {
+  if (!metroBarEl) return;
+  const n = metronomeBeatsPerBar;
+  const preset = [...metroBarEl.options].some((o) => o.value === String(n));
+  if (preset) {
+    metroBarEl.value = String(n);
+    metroBarCustomEl?.classList.add("hidden");
+  } else {
+    metroBarEl.value = "custom";
+    if (metroBarCustomEl) {
+      metroBarCustomEl.value = String(n);
+      metroBarCustomEl.classList.remove("hidden");
+    }
+  }
+  _renderMetroGrouping(); // refits, covering the custom box shown/hidden above
+}
+// Clamp a typed meter into the range the backend already validates
+// (beats_per_bar is ge=1, le=32 in app/api/jobs.py) and apply it. Anything
+// unparseable falls back to 4 rather than to Auto: the user explicitly asked
+// for a custom meter, so dropping them back to detection would be surprising.
+function _applyCustomBeatsPerBar() {
+  if (!metroBarCustomEl) return;
+  const raw = parseInt(metroBarCustomEl.value, 10);
+  const n = Number.isFinite(raw) ? Math.max(1, Math.min(32, raw)) : 4;
+  metroBarCustomEl.value = String(n);
+  setMetronomeBeatsPerBar(n);
+  setMetronomeGrouping(null);
+  _renderMetroGrouping();
+  applyMetronomeAccent();
+  _renderMetroNote(_lastGrid);
+  _saveMetroPrefs();
+}
+
+// The grouping box is only meaningful for an explicit meter that actually has a
+// choice to make: Auto groups each detected bar by its own length, Off has no
+// bars, and 2, 3 and 4 have one sensible reading. Shows the grouping in force,
+// so a user can see that 7 is being played 3+2+2 before deciding to change it.
+function _renderMetroGrouping() {
+  if (!metroGroupEl) return;
+  const n = metronomeBeatsPerBar;
+  if (!(n >= 5)) {
+    metroGroupEl.classList.add("hidden");
+    // Showing or hiding it changes how wide the row wants to be by ~80px
+    // and the ResizeObserver cannot see it: the strip's own box is flex-sized
+    // and its height does not move, since everything on the row is one line of
+    // 34px controls. Without this, picking a 7/8 meter puts the strip back into
+    // the silent sideways scroll of #586.
+    refitFooter();
+    return;
+  }
+  metroGroupEl.classList.remove("hidden");
+  metroGroupEl.value = normaliseGrouping(metronomeGrouping, n).join("+");
+  metroGroupEl.placeholder = defaultGrouping(n).join("+");
+  refitFooter(); // see the matching call on the hidden path above
+}
+
+// Parse "3+2+2" (or "3 2 2", or "3,2,2") into a grouping for the current meter.
+// A grouping that does not sum to the bar length is rejected rather than
+// repaired -- a half-understood one would accent beats the user never asked
+// for -- and the box snaps back to what is actually being played.
+let _groupWarnTimer = null;
+
+function _applyGrouping() {
+  if (!metroGroupEl) return;
+  const n = metronomeBeatsPerBar;
+  const parts = metroGroupEl.value
+    .split(/[^0-9]+/)
+    .filter(Boolean)
+    .map((x) => parseInt(x, 10));
+  const sum = parts.reduce((a, b) => a + b, 0);
+  const ok = parts.length > 0 && sum === n;
+  setMetronomeGrouping(ok ? parts : null);
+  _renderMetroGrouping();
+  applyMetronomeAccent();
+  _renderMetroNote(_lastGrid);
+  _saveMetroPrefs();
+  // Snapping back to the default without saying why reads as the box being
+  // broken rather than as the input being refused. An empty box is a
+  // deliberate "use the default", so only a non-empty one that does not fit
+  // is worth complaining about.
+  if (!ok && parts.length) {
+    metroGroupEl.classList.add("invalid");
+    if (metroNoteEl) {
+      metroNoteEl.textContent = t("click.groupMustSum", { beats: n });
+      metroNoteEl.className = "metro-note warn";
+    }
+    clearTimeout(_groupWarnTimer);
+    _groupWarnTimer = setTimeout(() => {
+      metroGroupEl.classList.remove("invalid");
+      _renderMetroNote(_lastGrid);
+    }, 2600);
+  }
+}
+
+// Count-in is a length select rather than the press-to-arm toggle it used to
+// be (#587): once "how many bars" is a question, on/off is just the zero case,
+// and a separate toggle beside a length would be two widgets for one setting.
+// "Armed" therefore reads as a non-zero value, and the tint lives on the
+// wrapper because a styled <select> cannot carry it.
+function _renderCountIn() {
+  if (!metroCountInEl) return;
+  metroCountInEl.value = String(metronomeCountInBars);
+  // The wrap carries the "on" tint the toggle button used to, so the panel
+  // still shows at a glance that a count-in is armed. Armed whether or not the
+  // running click is on: the count-in plays on its own (see _armCountIn).
+  metroCountInEl.parentElement?.classList.toggle("active", metronomeCountInBars > 0);
+}
+
+// Things that have to follow the click on and off but live in modules this
+// one cannot import without a cycle: the beat grid editor imports from here.
+const _metronomeListeners = new Set();
+
+/** Calls `fn(on)` whenever the click track is switched on or off. */
+export function onMetronomeToggle(fn) {
+  _metronomeListeners.add(fn);
+  return () => _metronomeListeners.delete(fn);
+}
+
+export function toggleMetronome(force) {
+  if (!metroBtn || metroBtn.disabled) return;
+  const on = force === undefined ? !metronomeEnabled : !!force;
+  setMetronomeEnabled(on);
+  metroBtn.classList.toggle("active", on);
+  metroBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  metronome?.setEnabled(on);
+  _saveMetroPrefs();
+  // The grid editor follows the click; see beatgridUi. The count-in does not,
+  // because it plays with the click off as well as on.
+  for (const fn of _metronomeListeners) {
+    try {
+      fn(on);
+    } catch (e) {
+      console.warn("[metronome] toggle listener failed:", e);
+    }
+  }
+}
+
+/**
+ * Reflect the current track's beat grid in the UI. `grid` is the parsed
+ * beats.json, or null when the job has none (pre-existing jobs) or the
+ * streaming path is active.
+ * @param {object|null} grid
+ * @param {string} reason  Shown to the user when there is no grid.
+ */
+let _lastGrid = null;
+
+function _renderMetroMultiplier() {
+  const mult = metronome?.getMultiplier?.() ?? 1;
+  for (const [btn, v] of [[metroHalfBtn, 0.5], [metroOneBtn, 1], [metroDoubleBtn, 2]]) {
+    if (!btn) continue;
+    const on = mult === v;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+  }
+}
+
+function _renderMetroNote(grid) {
+  if (!metroNoteEl) return;
+  if (!grid) { metroNoteEl.textContent = ""; metroNoteEl.className = "metro-note"; return; }
+
+  // Report the tempo actually being clicked, which is the detected tempo times
+  // whatever level the user picked -- not the raw detected value.
+  const eff = metronome?.getEffectiveBpm?.();
+  const bpm = Number.isFinite(eff) ? eff : Number(grid.bpm);
+  const conf = Number(grid.confidence);
+
+  // Each branch is one complete, translated sentence (not clauses joined at
+  // runtime) so word order can differ freely per language -- see i18n.js's
+  // metro.note.* keys. Deliberately worded as "on a drum hit", not
+  // "confidence the tempo is right": a half-time grid scores ~100% here and
+  // is still musically wrong, so the note must not imply the metrical level
+  // was verified -- that is what the halve/double control is for.
+  let text = "";
+  if (Number.isFinite(bpm) && Number.isFinite(conf)) {
+    const bpmStr = bpm.toFixed(1);
+    const nBars = Array.isArray(grid.bars) ? grid.bars.length : 0;
+    if (metronomeBeatsPerBar < 0 && nBars === 1) {
+      text = t("metro.note.detectedSingleBar", { bpm: bpmStr, conf, beats: grid.bars[0].beats_per_bar });
+    } else if (metronomeBeatsPerBar < 0 && nBars > 1) {
+      text = t("metro.note.detectedMultiBar", { bpm: bpmStr, conf, count: nBars });
+    } else if (metronomeBeatsPerBar > 0) {
+      // A grouped bar accents more than the 1, so "accenting every N beats"
+      // would describe a click that is not being played (#595). Say the
+      // grouping and name the beats it stresses, which is also the only place
+      // the panel explains what "3+2" in the grouping box means.
+      const g = normaliseGrouping(metronomeGrouping, metronomeBeatsPerBar);
+      if (g.length > 1) {
+        const stressed = [];
+        let at = 1;
+        for (const n of g) { stressed.push(at); at += n; }
+        text = t("metro.note.grouped", {
+          bpm: bpmStr,
+          conf,
+          accent: metronomeBeatsPerBar,
+          groups: g.join("+"),
+          stress: t("metro.note.stress", { beats: stressed.join(", ") }),
+        });
+      } else {
+        text = t("metro.note.full", { bpm: bpmStr, conf, accent: metronomeBeatsPerBar });
+      }
+    } else {
+      text = t("metro.note.noAccent", { bpm: bpmStr, conf });
+    }
+  } else if (Number.isFinite(bpm)) {
+    text = t("metro.note.fallback", { bpm: bpm.toFixed(1) });
+  }
+  metroNoteEl.textContent = text;
+  metroNoteEl.title = text; // clipped to one line; the full text is a hover away
+  metroNoteEl.className = Number.isFinite(conf) && conf < 60 ? "metro-note warn" : "metro-note";
+}
+
+/**
+ * Show the click-track options whether or not there is a grid to act on.
+ *
+ * They used to be hidden outright when a track had no beat grid, and with no
+ * track at all, so the footer lost Count-in, the bar selector, Grid and the
+ * rate buttons and then got them back. Half the strip appearing and vanishing
+ * reads as a fault rather than as a state, and it is the one thing in that row
+ * that does not behave like the rest: the metronome button beside them, and
+ * every unavailable lane in the mixer, grey out rather than leave.
+ *
+ * So the panel stays and its controls go inert, which is also what the
+ * disabled attribute already tells a screen reader.
+ */
+function setMetroOptionsAvailable(available) {
+  if (!metroPanel) return;
+  // "hidden" is the collapse levels' own word for this panel, and it shipped in
+  // the markup as the starting state. Availability no longer uses it, so clear
+  // it once and let footerFit be the only thing that sets it.
+  metroPanel.classList.remove("hidden");
+  metroPanel.classList.toggle("unavailable", !available);
+  for (const el of metroPanel.querySelectorAll("button, select, input")) {
+    el.disabled = !available;
+  }
+}
+
+export function updateMetronomeAvailability(grid, reason = "") {
+  if (!metroBtn) return;
+  _lastGrid = grid || null;
+  const available = !!(grid && Array.isArray(grid.beats) && grid.beats.length);
+  metroBtn.disabled = !available;
+  metroBtn.title = available ? t("click.toggleTitle") : (reason || t("click.unavailableAria"));
+
+  if (!available) {
+    // Keep the stored preference so the click returns on the next track that
+    // does have a grid; only the live toggle goes off.
+    metroBtn.classList.remove("active");
+    metroBtn.setAttribute("aria-pressed", "false");
+    setMetroOptionsAvailable(false);
+    if (metroNoteEl) { metroNoteEl.textContent = reason || ""; metroNoteEl.className = "metro-note"; }
+    // Still re-fits: the options keep their width now rather than leaving, so
+    // the row is wider in this state than it used to be and may need to
+    // collapse a level it did not before.
+    refitFooter();
+    return;
+  }
+
+  metroBtn.classList.toggle("active", metronomeEnabled);
+  metroBtn.setAttribute("aria-pressed", metronomeEnabled ? "true" : "false");
+  setMetroOptionsAvailable(true);
+  refitFooter(); // see the matching call on the unavailable path above
+  setMetronomeHasBars(Array.isArray(grid.bars) && grid.bars.length > 0);
+  const autoOpt = metroBarEl?.querySelector('option[value="-1"]');
+  if (autoOpt) {
+    autoOpt.disabled = !metronomeHasBars;
+    autoOpt.textContent = metronomeHasBars ? t("click.auto") : t("click.autoNone");
+  }
+  _renderMetroBar();
+  _renderMetroMultiplier();
+  _renderMetroNote(grid);
+}
+
+// ── Footer popovers ──────────────────────────────────────────────────────
+//
+// Two of them, side by side in the click-track cluster: the options panel,
+// which only exists once footerFit decides the options do not fit inline, and
+// the volume fader, which is there at every width.
+//
+// Both are position:fixed. .footer-clusters scrolls sideways and clips
+// vertically (overflow-y: hidden), so an absolutely positioned panel would be
+// clipped by the strip it belongs to. Fixed escapes that, at the price of
+// placing them from the trigger's rect by hand.
+
+/**
+ * Put `panel` directly above `btn`.
+ *
+ * Upward because these triggers sit in the footer, so there is nothing below
+ * them to open into, and measured while the panel is shown: a display:none
+ * panel has no height to subtract.
+ */
+function _placeAbove(btn, panel) {
+  const r = btn.getBoundingClientRect();
+  const left = Math.max(8, Math.min(Math.round(r.left), window.innerWidth - panel.offsetWidth - 8));
+  panel.style.left = `${left}px`;
+  panel.style.top = `${Math.max(8, Math.round(r.top - panel.offsetHeight - 8))}px`;
+}
+
+/**
+ * Wire one trigger/panel pair.
+ *
+ * `shownClass` is what the panel's own CSS keys off: the options panel is shut
+ * by default and opts in with .open, the volume panel ships .hidden and opts
+ * out of it. `onOpen` runs before this one is shown, which is how the two take
+ * turns.
+ */
+function _wirePopover(btn, panel, { shownClass = "open", onOpen } = {}) {
+  const isOpen = () => btn.getAttribute("aria-expanded") === "true";
+  const place = () => _placeAbove(btn, panel);
+
+  const close = () => {
+    if (!isOpen()) return;
+    if (shownClass === "hidden") panel.classList.add("hidden");
+    else panel.classList.remove(shownClass);
+    btn.setAttribute("aria-expanded", "false");
+  };
+
+  const open = () => {
+    onOpen?.();
+    if (shownClass === "hidden") panel.classList.remove("hidden");
+    else panel.classList.add(shownClass);
+    btn.setAttribute("aria-expanded", "true");
+    place();
+  };
+
+  btn.addEventListener("click", (e) => {
+    // Stops the document handler below from treating the press that opened a
+    // panel as the click away that shuts it -- and, for a trigger sitting
+    // inside another panel, stops that outer one closing underneath it.
+    e.stopPropagation();
+    if (isOpen()) close();
+    else open();
+  });
+
+  // A click inside is a click on a control, not a click away from it.
+  panel.addEventListener("click", (e) => e.stopPropagation());
+
+  document.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isOpen()) {
+      close();
+      btn.focus();
+    }
+  });
+
+  // Anything that moves the trigger moves the panel with it, and a refit that
+  // puts the options back inline leaves nothing for its panel to hang off.
+  window.addEventListener("resize", close);
+  window.addEventListener("footerfit", close);
+
+  return { close, place, isOpen };
+}
+
+function wireFooterPopovers() {
+  // Each trigger stops the click that opened it from reaching the document,
+  // which is what keeps that press from being read as the click away that
+  // shuts the panel -- but it also means neither panel would ever see the
+  // other open. They sit side by side in the same cluster, so only one of them
+  // should be over the footer at a time.
+  const other = {};
+
+  if (metroVolBtn && metroVolPanel) {
+    // The fader is a drag, not a click: a pointerdown that leaves the panel
+    // still ends on the document, and without this the panel would shut
+    // mid-drag.
+    metroVolPanel.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const volume = _wirePopover(metroVolBtn, metroVolPanel, {
+      shownClass: "hidden",
+      onOpen: () => other.options?.(),
+    });
+    other.volume = volume.close;
+  }
+
+  if (metroMoreBtn && metroPanel) {
+    const options = _wirePopover(metroMoreBtn, metroPanel, { onOpen: () => other.volume?.() });
+    other.options = options.close;
+    // Revealing the grouping box or picking a longer meter changes the panel's
+    // height, which for an upward-opening popover changes where its top belongs.
+    metroPanel.addEventListener("change", () => { if (options.isOpen()) options.place(); });
+  }
+}
+
+function wireMetronomeControl() {
+  if (!metroBtn) return;
+  wireFooterPopovers();
+  onLanguageChange(_renderMetroVolume);
+
+  // Restore preferences before the first track loads so the click comes back
+  // on exactly as the user left it.
+  storeGet(_METRO_PREFS_KEY, null).then((prefs) => {
+    if (prefs && typeof prefs === "object") {
+      if (typeof prefs.volume === "number") setMetronomeVolume(Math.max(0, Math.min(1, prefs.volume)));
+      if (typeof prefs.beatsPerBar === "number") setMetronomeBeatsPerBar(prefs.beatsPerBar);
+      if (Array.isArray(prefs.grouping)) setMetronomeGrouping(prefs.grouping);
+      if (typeof prefs.enabled === "boolean") setMetronomeEnabled(prefs.enabled);
+      // countInBars superseded the countIn boolean (#587). Read the old key
+      // when the new one is absent so an upgrade keeps the count-in armed
+      // rather than silently turning it off.
+      if (typeof prefs.countInBars === "number") setMetronomeCountInBars(prefs.countInBars);
+      else if (typeof prefs.countIn === "boolean") setMetronomeCountInBars(prefs.countIn ? 1 : 0);
+    }
+    _renderMetroVolume();
+    _renderMetroBar();
+    _renderCountIn();
+    if (metronomeEnabled && !metroBtn.disabled) {
+      metroBtn.classList.add("active");
+      metroBtn.setAttribute("aria-pressed", "true");
+    }
+  }).catch((e) => console.warn("[transport] failed to load metronome prefs:", e));
+
+  // Toggles the click on/off; also bound to the K key elsewhere. Volume,
+  // accent, rate and count-in sit inline next to it, always visible once a
+  // track has a beat grid -- no click needed to reveal them (#269 follow-up).
+  metroBtn.addEventListener("click", () => toggleMetronome());
+
+  metroVolEl?.addEventListener("input", () => {
+    const v = Math.max(0, Math.min(1, parseFloat(metroVolEl.value)));
+    setMetronomeVolume(v);
+    _renderMetroVolume();
+    metronome?.setVolume(v);
+    _saveMetroPrefs();
+  });
+
+  for (const [btn, mult] of [[metroHalfBtn, 0.5], [metroOneBtn, 1], [metroDoubleBtn, 2]]) {
+    btn?.addEventListener("click", () => {
+      metronome?.setMultiplier(mult);
+      _renderMetroMultiplier();
+      _renderMetroNote(_lastGrid);
+    });
+  }
+
+  metroCountInEl?.addEventListener("change", () => {
+    setMetronomeCountInBars(parseInt(metroCountInEl.value, 10));
+    _renderCountIn();
+    _saveMetroPrefs();
+  });
+
+  metroBarEl?.addEventListener("change", () => {
+    if (metroBarEl.value === "custom") {
+      // Seed from whatever the box already holds so picking "Custom..." does
+      // not silently jump the meter to something the user never chose.
+      metroBarCustomEl?.classList.remove("hidden");
+      _applyCustomBeatsPerBar();
+      metroBarCustomEl?.focus();
+      return;
+    }
+    metroBarCustomEl?.classList.add("hidden");
+    const raw = parseInt(metroBarEl.value, 10);
+    setMetronomeBeatsPerBar(Number.isFinite(raw) ? raw : -1);
+    // The old grouping belonged to the old bar length; keeping it would either
+    // be refused on every beat or, worse, fit the new length by accident.
+    setMetronomeGrouping(null);
+    _renderMetroGrouping();
+    applyMetronomeAccent();
+    _renderMetroNote(_lastGrid);
+    _saveMetroPrefs();
+  });
+
+  metroBarCustomEl?.addEventListener("change", _applyCustomBeatsPerBar);
+  metroGroupEl?.addEventListener("change", _applyGrouping);
+}
