@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # 桌面框架（Tauri 2 线，保留默认 features 以构造运行时 Builder）
-tauri = { version = "2.12.4" }
+tauri = { version = "2.12.4", features = [] }
 # 插件（ADR-0001 锁定版本）
 tauri-plugin-shell = "2.5.0"
 tauri-plugin-store = "2.5.0"

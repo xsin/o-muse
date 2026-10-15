@@ -18,7 +18,7 @@
 | Task 3 | Kontakt 库管理（只读盘点） | done | `57bea16` |
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | done | `[Task 4]` |
 | Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | done | `[Task 5]` |
-| Task 6 | v1 集成测试 + 打包 | pending | — |
+| Task 6 | v1 集成测试 + 打包 | done | `[Task 6]` |
 | Task 7 | 插件目录自动发现 (v1.1) | pending | — |
 | Task 8 | 插件元数据 + 缓存 (v1.1) | pending | — |
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
@@ -161,10 +161,12 @@
 - 验收：`cargo test --lib license` 通过（5 个解析用例）；`cargo check` 0 错误/0 警告；前端 `typecheck`/`build` 通过。⚠️ 密钥经 `.env`（gitignore），本地/构建注入，不进 git。
 - **偏差记录（Task 5）**：Dodo 校验采用保守解析（兼容 `items`/`subscriptions` 数组与单对象，active/trialing 视为有效），任何网络/解析异常一律回退 Free，不误判为 Pro。Pro 实际写入逻辑（mutate.rs）推迟至 v1.1，本 Task 仅建立拦截边界与占位命令。
 
-### Task 6 — v1 集成测试 + 打包（前置：Task 0–5）
-- `tests/integration.rs`：扫描模拟 XML、调用 `scan_libraries` 不 panic、Free 下 Pro 拒绝。
-- `tauri.conf.json` `productName:"Music Rig"`；`npm run tauri build` 产 `.dmg/.app`。
-- 验收：`cargo test && npm run tauri build`；产物名 Music Rig。禁止 CI 引入无缓存网络。
+### Task 6 — v1 集成测试 + 打包（前置：Task 0–5）✅ done
+- `tests/integration.rs`（11 用例全过）：Service Center XML 解析、Kontakt plist 解析、诊断（缺路径/断卷/重复 SNPID）、`tauri::generate_context!()` 加载 `tauri.conf.json`（打包冒烟前置）。`lib.rs` 改 `pub mod core` 以暴露给集成测试。
+- 打包冒烟：`node_modules/.bin/tauri build --no-bundle` 成功产出 `src-tauri/target/release/music-rig`（release 编译 + `tauri-build` 嵌入配置/图标/externalBin + 触发前端 `beforeBuildCommand`）。
+- ⚠️ **未做**：完整 `.dmg/.app` 打包与代码签名（沙箱无签名身份），且无 Tauri 移动端/Windows 目标。本 smoke 覆盖编译与配置嵌入；真实 `.dmg` 交付需本地带签名身份执行 `tauri build`。
+- **偏差记录（Task 6）**：bundle identifier 由 `com.musicrig.app` 改为 `com.musicrig.desktop`（避免 macOS 与 `.app` 扩展名冲突的 Tauri 警告）。`tauri build --no-bundle` 的 `bins` 警告为库 crate 正常现象（本 crate 为 lib-only，由 Tauri CLI 生成二进制）。
+- 验收：`cargo test` 11 passed；`tauri build --no-bundle` 产物生成；`cargo check` 0 错误/0 警告；前端 `typecheck`/`build` 通过；`grep -ri stemdeck` 空。
 
 ### Task 7 — 插件目录自动发现 (v1.1)（前置：Task 6）
 - `plugin_scanner/model.rs`：`ScanSource`/`PluginFormat{AU,VST,VST3,AAX,CLAP,Auto}`/`PluginInfo`（见 `tdd.md` §3.3）。

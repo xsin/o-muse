@@ -4,7 +4,7 @@
 // 守护进程句柄存于 `SidecarState`，由命令层共享。
 
 mod commands;
-mod core;
+pub mod core;
 
 use std::sync::Mutex;
 
