@@ -1,24 +1,34 @@
-本产品（Music Rig）包含来自以下开源项目的代码或逻辑：
+本产品（Music Rig）是一个独立的音乐人工具箱。其分轨能力基于
+Meta 的 Demucs 模型实现，并参考了以下开源项目的设计思路。
+本产品未直接复制任何第三方项目的源代码。
 
 ─────────────────────────────────────────────────────
-项目一：StemDeck
+参考项目：StemDeck
 来源：https://github.com/stemdeckapp/stemdeck
-拉取版本：commit 5f9405ca68ac31b31ae07ac416141d4d1f7b5f3a
-版权：Copyright (c) Thales Claro
-许可证：Apache License, Version 2.0（见 licenses/APACHE-2.0.txt）
-
-本产品基于 StemDeck 源码进行定制化改造。StemDeck 项目明确声明
-不接受任何资金、赞助或资助。本产品与 StemDeck 项目及其作者无
-任何官方关联、合作或背书关系。本产品的商业化行为不代表 StemDeck
-项目立场。
+许可证：Apache License 2.0
+使用方式：仅作为设计参考（多轨 UI 交互、Python sidecar 生命周期管理）
+未复制任何代码。StemDeck 项目明确声明不接受任何资金、赞助或资助。
+本产品与 StemDeck 项目及其作者无任何官方关联、合作或背书关系。
 
 ─────────────────────────────────────────────────────
-项目二：KLM - Kontakt Library Manager
+参考项目：KLM - Kontakt Library Manager
 来源：https://github.com/cloinse/klm
-版权：Copyright (c) cloinse
-许可证：MIT License（见 licenses/MIT.txt）
-
-本产品参考 KLM 的 Kontakt 库元数据解析逻辑与安全文件操作模型，
-用 Rust 语言重新实现。未直接复制 KLM 的 Flutter/Dart 源代码。
+许可证：MIT License
+使用方式：仅作为逻辑参考（Kontakt 库解析逻辑、安全文件操作模型）
+用 Rust 独立重写。未复制任何 Flutter/Dart 源码。
 
 ─────────────────────────────────────────────────────
+依赖：Demucs
+来源：https://github.com/facebookresearch/demucs
+版权：Copyright (c) Meta Platforms, Inc. and affiliates.
+许可证：MIT License
+使用方式：作为 Python 依赖直接使用。
+
+─────────────────────────────────────────────────────
+依赖：Tauri
+来源：https://github.com/tauri-apps/tauri
+许可证：MIT / Apache 2.0 双许可
+使用方式：作为桌面应用框架直接依赖。
+
+─────────────────────────────────────────────────────
+其他依赖的许可证文本存放于 licenses/ 目录下，随项目分发。
