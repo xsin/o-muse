@@ -37,12 +37,17 @@ pub fn upsert(mut sources: Vec<ScanSource>, new: ScanSource) -> Vec<ScanSource> 
 }
 
 /// 移除指定路径的自定义源。
+///
+/// 与 `upsert` 一样用 `key()` 归一化比较，容忍结尾斜杠差异
+/// （否则 `/tmp/plug` 无法移除 `/tmp/plug/`，用户点了没反应）。
 pub fn remove(sources: Vec<ScanSource>, path: &Path) -> Vec<ScanSource> {
-    let target = path.to_string_lossy().to_string();
-    sources
-        .into_iter()
-        .filter(|s| s.path.to_string_lossy() != target)
-        .collect()
+    let target = normalize_path_key(path);
+    sources.into_iter().filter(|s| s.key() != target).collect()
+}
+
+/// 路径判重键（与 `ScanSource::key()` 一致：去结尾斜杠）。
+pub fn normalize_path_key(path: &Path) -> String {
+    path.to_string_lossy().trim_end_matches('/').to_string()
 }
 
 /// 自动检测目录主要承载的格式：统计各扩展名出现次数，取最多者。

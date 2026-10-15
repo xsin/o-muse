@@ -166,49 +166,31 @@ impl PluginInfo {
     }
 }
 
-/// 读取文件/目录的大小与修改时间。目录则递归累加（上限保护）。
+/// 读取文件/目录的"指纹"：大小 + 修改时间。
+///
+/// review 修复两点：
+///  1. **性能**：此前对目录做最多 2000 次 stat 的递归求和，且发生在
+///     **每次发现阶段**（早于缓存查询），导致"全部命中缓存"的重扫仍要付
+///     完整遍历代价。改为：文件用自身 size+mtime；bundle 目录用
+///     `Contents/Info.plist` 的 size+mtime（元数据真正来源，成本 O(1)）。
+///  2. **正确性**：目录自身的 mtime 在**内部文件被修改时不变**，
+///     此前会导致 `Info.plist` 改了版本（长度不变）却永远命中旧缓存。
 fn path_stats(path: &std::path::Path) -> (u64, DateTime<Utc>) {
-    let meta = match std::fs::metadata(path) {
-        Ok(m) => m,
-        Err(_) => return (0, DateTime::<Utc>::MIN_UTC),
-    };
-    let mtime = meta
-        .modified()
-        .map(DateTime::<Utc>::from)
-        .unwrap_or(DateTime::<Utc>::MIN_UTC);
-
-    let size = if meta.is_file() {
-        meta.len()
-    } else {
-        // 目录：浅层累加，避免超大 bundle 拖慢发现阶段
-        dir_size_capped(path, 2000)
-    };
-    (size, mtime)
-}
-
-/// 递归统计目录大小，文件数超过 cap 则提前停止。
-fn dir_size_capped(dir: &std::path::Path, cap: usize) -> u64 {
-    let mut total = 0u64;
-    let mut count = 0usize;
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        let rd = match std::fs::read_dir(&d) {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        for ent in rd.flatten() {
-            if count >= cap {
-                return total;
-            }
-            count += 1;
-            if let Ok(m) = ent.metadata() {
-                if m.is_file() {
-                    total += m.len();
-                } else if m.is_dir() {
-                    stack.push(ent.path());
-                }
-            }
+    // bundle：以 Contents/Info.plist 作为指纹来源
+    let plist = path.join("Contents").join("Info.plist");
+    if plist.is_file() {
+        if let Ok(m) = std::fs::metadata(&plist) {
+            let mtime = m.modified().map(DateTime::<Utc>::from).unwrap_or(DateTime::<Utc>::MIN_UTC);
+            return (m.len(), mtime);
         }
     }
-    total
+
+    match std::fs::metadata(path) {
+        Ok(m) => {
+            let mtime = m.modified().map(DateTime::<Utc>::from).unwrap_or(DateTime::<Utc>::MIN_UTC);
+            let size = if m.is_file() { m.len() } else { 0 };
+            (size, mtime)
+        }
+        Err(_) => (0, DateTime::<Utc>::MIN_UTC),
+    }
 }

@@ -154,14 +154,24 @@ fn fallback_from_binary(path: &Path) -> Metadata {
     meta
 }
 
+/// 只读地取文件前 `limit` 字节。
+///
+/// 插件二进制动辄数百 MB，**绝不整文件读入内存**（review 修复）。
+fn read_head(path: &Path, limit: usize) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let f = std::fs::File::open(path).ok()?;
+    let mut buf = Vec::with_capacity(limit.min(64 * 1024));
+    f.take(limit as u64).read_to_end(&mut buf).ok()?;
+    Some(buf)
+}
+
 /// 在文件字节流中查找形如 `x.y.z`（或 `x.y`）的版本串。
 ///
 /// 版本串可能嵌在更长的可打印串中（如 `Vintage EQ 2.1.0`），故在 token 内
 /// 逐字符扫描 digit 起点，而非只匹配 token 开头。
 fn find_version_string(path: &Path) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    let window = &bytes[..bytes.len().min(512 * 1024)]; // 只看前 512KB
-    let text: String = window
+    let bytes = read_head(path, 512 * 1024)?;
+    let text: String = bytes
         .iter()
         .take(64 * 1024)
         .map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '\n' })
@@ -207,9 +217,11 @@ fn is_version_like(s: &str) -> bool {
         .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric()))
 }
 
-/// 取文件中第一个长度 >= min_len 的可打印 ASCII 串（用于名称回退）。
+/// 取文件中第一个长度 >= 4 的可打印 ASCII 串（用于名称回退）。
+///
+/// 同样只读前 64KB，不整文件读入。
 fn first_printable_string(path: &Path, _min_len: usize) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = read_head(path, 64 * 1024)?;
     let mut cur = String::new();
     for &b in bytes.iter().take(64 * 1024) {
         if b.is_ascii_graphic() && b != b'\0' {
@@ -229,23 +241,14 @@ fn first_printable_string(path: &Path, _min_len: usize) -> Option<String> {
 
 /// 并行提取一批插件的元数据。
 ///
-/// VST3 在 macOS 上可能不支持从后台线程调用 `bundleEntry`，故其任务
-/// 额外包一层 `std::thread::spawn`，避免阻塞调用方（Tauri 主线程）。
+/// 说明（review 修正）：此前在 rayon 的 `par_iter` 内再包一层
+/// `std::thread::spawn(...).join()`，等于每个任务多创建/销毁一个线程却
+/// **立即等待**，既无并发收益又破坏 rayon 的 work-stealing。
+///
+/// 真正的"不阻塞主线程"由命令层的 `spawn_blocking` 保证（见
+/// `commands/plugin_scanner.rs`）；此处保持纯 rayon 并行即可。
 pub fn extract_all(infos: &mut [PluginInfo]) {
-    let metas: Vec<Metadata> = infos
-        .par_iter()
-        .map(|info| {
-            if info.format == PluginFormat::VST3 {
-                // VST3：独立线程执行，避免阻塞
-                let owned = info.clone();
-                std::thread::spawn(move || extract_metadata(&owned))
-                    .join()
-                    .unwrap_or_default()
-            } else {
-                extract_metadata(info)
-            }
-        })
-        .collect();
+    let metas: Vec<Metadata> = infos.par_iter().map(extract_metadata).collect();
 
     for (info, meta) in infos.iter_mut().zip(metas) {
         apply_metadata(info, meta);

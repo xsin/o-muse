@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS plugin_cache (
     vendor TEXT,
     version TEXT,
     format TEXT,
+    bundle_id TEXT,
     scanned_at TEXT
 );
 "#;
@@ -54,7 +55,7 @@ pub fn cache_key(path: &std::path::Path, file_size: u64, last_modified: DateTime
 pub fn try_load(conn: &Connection, info: &mut PluginInfo) -> bool {
     let key = cache_key(&info.path, info.file_size, info.last_modified);
     let mut stmt = match conn.prepare(
-        "SELECT file_size, last_modified, name, vendor, version, format FROM plugin_cache WHERE path = ?1",
+        "SELECT file_size, last_modified, name, vendor, version, format, bundle_id FROM plugin_cache WHERE path = ?1",
     ) {
         Ok(s) => s,
         Err(_) => return false,
@@ -67,10 +68,11 @@ pub fn try_load(conn: &Connection, info: &mut PluginInfo) -> bool {
             r.get::<_, Option<String>>(3)?,
             r.get::<_, Option<String>>(4)?,
             r.get::<_, Option<String>>(5)?,
+            r.get::<_, Option<String>>(6)?,
         ))
     });
 
-    let Ok((size, mtime, name, vendor, version, format)) = row else {
+    let Ok((size, mtime, name, vendor, version, format, bundle_id)) = row else {
         return false;
     };
 
@@ -92,14 +94,18 @@ pub fn try_load(conn: &Connection, info: &mut PluginInfo) -> bool {
             info.format = pf;
         }
     }
+    // bundle_id 必须一并恢复，否则缓存命中后 UI 永远显示 "—"
+    if bundle_id.is_some() {
+        info.bundle_id = bundle_id;
+    }
     true
 }
 
 /// 写入（UPSERT）一条缓存记录。
 pub fn store(conn: &Connection, info: &PluginInfo) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO plugin_cache (path, file_size, last_modified, name, vendor, version, format, scanned_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        "INSERT INTO plugin_cache (path, file_size, last_modified, name, vendor, version, format, bundle_id, scanned_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(path) DO UPDATE SET
            file_size = excluded.file_size,
            last_modified = excluded.last_modified,
@@ -107,6 +113,7 @@ pub fn store(conn: &Connection, info: &PluginInfo) -> rusqlite::Result<()> {
            vendor = excluded.vendor,
            version = excluded.version,
            format = excluded.format,
+           bundle_id = excluded.bundle_id,
            scanned_at = excluded.scanned_at",
         params![
             info.path.to_string_lossy().as_ref(),
@@ -116,6 +123,7 @@ pub fn store(conn: &Connection, info: &PluginInfo) -> rusqlite::Result<()> {
             info.vendor,
             info.version,
             info.format.as_str(),
+            info.bundle_id,
             Utc::now().timestamp_millis().to_string(),
         ],
     )?;
@@ -170,6 +178,37 @@ pub fn extract_with_cache(conn: &Connection, infos: &mut [PluginInfo]) -> CacheS
 /// 清空缓存（供 UI "重新扫描"使用）。
 pub fn clear(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch("DELETE FROM plugin_cache;")
+}
+
+/// 删除已不存在于本次扫描结果中的缓存行。
+///
+/// 否则插件被删除/移动后库会无限增长（review 修复）。
+pub fn prune_missing(conn: &Connection, present: &[PluginInfo]) -> rusqlite::Result<usize> {
+    if present.is_empty() {
+        // 扫描结果为空时清库（正常场景：确实没装插件；也可能是源被禁用）
+        conn.execute_batch("DELETE FROM plugin_cache;")?;
+        return Ok(0);
+    }
+    let mut stmt = conn.prepare("SELECT path FROM plugin_cache")?;
+    let stored: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(stmt);
+
+    let live: std::collections::HashSet<String> = present
+        .iter()
+        .map(|p| p.path.to_string_lossy().to_string())
+        .collect();
+
+    let mut removed = 0usize;
+    for path in stored {
+        if !live.contains(&path) {
+            conn.execute("DELETE FROM plugin_cache WHERE path = ?1", params![path])?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 #[cfg(test)]
