@@ -26,7 +26,10 @@ pub fn run() {
             commands::stem_separation::stem_status,
             commands::stem_separation::stem_results,
             commands::library_manager::scan_libraries,
+            commands::library_manager::repair_library,
             commands::plugin_scanner::plugin_scanner_placeholder,
+            commands::license::get_tier,
+            commands::license::activate_license_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Music Rig");

@@ -17,14 +17,14 @@
 | Task 2 | Python Sidecar（分轨引擎） | done | `f472cc5` |
 | Task 3 | Kontakt 库管理（只读盘点） | done | `57bea16` |
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | done | `[Task 4]` |
-| Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | pending | — |
+| Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | done | `[Task 5]` |
 | Task 6 | v1 集成测试 + 打包 | pending | — |
 | Task 7 | 插件目录自动发现 (v1.1) | pending | — |
 | Task 8 | 插件元数据 + 缓存 (v1.1) | pending | — |
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 5（Free/Pro 判定 + Dodo 校验；前置 Task 1 完成，Task 4 已交付前端壳）。
+**当前应执行**：Task 6（v1 集成测试 + 打包；前置 Task 0–5 完成）。
 
 > **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
 > 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
@@ -154,12 +154,12 @@
   - `tauri.conf.json`：`beforeDevCommand= npm run dev`、`beforeBuildCommand= npm run build`、`frontendDist="../dist"`（devUrl 仍 5173）。
   - npm 缓存因沙箱拒写 `~/.npm`，改设 `npm_config_cache=.npm-cache/`（已 gitignore）。
 
-### Task 5 — Free/Pro 判定 + **Dodo 校验**（前置：Task 1）⚠️ ADR-0003 覆盖原"不做网络校验"
-- `license/mod.rs`：`LicenseTier{Free,Pro}`；`current_tier() async` 读 `store.license_key` → **Dodo API** 校验（`DODO_API_KEY`+`DODO_PRODUCT_ID`）→ 推导；无 key/失败→`Free`（带 TTL 缓存）。
-- Pro 专属 Command 入口统一拦截：`if current_tier()!=Pro { return Err("此功能需要 Music Rig Pro 订阅") }`。
-- Pro 范围：`mutate.rs`（库写入/修复）、`add_custom_source`（v1.1）。
-- 验收：`cargo test --lib license`；Free 下 Pro 命令报错。**新增**：激活后 Pro 命令成功。
-- ⚠️ 密钥经 `.env`（gitignore），本地/构建注入。
+### Task 5 — Free/Pro 判定 + **Dodo 校验**（前置：Task 1）✅ done
+- `core/license/mod.rs`：`LicenseTier{Free,Pro}`；`current_tier(app) async` 优先读 `tauri-plugin-store` TTL 缓存（24h）→ 否则读 `license_key` → **Dodo API** 校验（`DODO_API_KEY`+`DODO_PRODUCT_ID`，`core/license/dodo.rs` 自研）→ 推导；无 key/失败→`Free`（写回缓存）。`activate_license(app,key) async` 写入 key + 校验 + 缓存。
+- Pro 专属 Command 入口统一经 `require_pro(app)` 拦截：`if !Pro { return Err("此功能需要 Music Rig Pro 订阅") }`。已落地示例：`commands/library_manager.rs::repair_library`（Pro 占位）。
+- 新增命令：`get_tier`、`activate_license_key`（前端设置页可激活并展示 tier）。
+- 验收：`cargo test --lib license` 通过（5 个解析用例）；`cargo check` 0 错误/0 警告；前端 `typecheck`/`build` 通过。⚠️ 密钥经 `.env`（gitignore），本地/构建注入，不进 git。
+- **偏差记录（Task 5）**：Dodo 校验采用保守解析（兼容 `items`/`subscriptions` 数组与单对象，active/trialing 视为有效），任何网络/解析异常一律回退 Free，不误判为 Pro。Pro 实际写入逻辑（mutate.rs）推迟至 v1.1，本 Task 仅建立拦截边界与占位命令。
 
 ### Task 6 — v1 集成测试 + 打包（前置：Task 0–5）
 - `tests/integration.rs`：扫描模拟 XML、调用 `scan_libraries` 不 panic、Free 下 Pro 拒绝。
