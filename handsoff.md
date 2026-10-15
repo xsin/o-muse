@@ -189,6 +189,26 @@
 - 性能（均达标）：50 插件首扫 **< 2s**；缓存扫描 **< 200ms**。
 - 全程使用 /tmp 模拟目录，**不依赖任何真实插件**。
 
+### Review + 优化轮（Task 0–10 全部完成后）
+- **方式**：两个 review 子代理并行审查（Rust 鲁棒性 / 前端 UX），逐条核实后修复，并补回归测试。
+- **Rust 关键修复**（均已回归测试锁定）：
+  1. **主线程阻塞（Critical）**：`scan_all_plugins`/`rescan_plugins`/`separate`/`stem_status`/`stem_results` 原为同步命令，会在插件多或 sidecar 冷启动时**冻结界面**。全部改为 `async` + `spawn_blocking`。`scan_plugins_by_format` 不再每次全量重扫（改为在结果上过滤）。
+  2. **sidecar 崩溃后永久失效（High）**：子进程 `Terminated` 时清空 `SidecarState`；锁改为**抗中毒**（`into_inner`）；检查与 spawn 合并进同一临界区（防并发重复拉起争抢端口）；健康检查超时**报错**而非返回死进程的 URL。
+  3. **整文件读入内存（High）**：`extract.rs` 由 `fs::read` 全量读入改为 `File::open`+`take(512KB/64KB)`，插件二进制动辄数百 MB。
+  4. **Dodo 越权授予 Pro（High）**：原实现只要响应里有**任意** active 订阅即放行。改为必须**绑定到提交的 key**；key 从 query string 移到请求头；无法绑定时保守拒绝。
+  5. **bundle 缓存永不失效（High）**：目录自身 mtime 不随内部文件变更，导致改了 `Info.plist` 版本仍永久命中旧值。改为以 `Contents/Info.plist` 的 size+mtime 做指纹（同时消除每次发现阶段最多 2000 次 stat 的开销）。
+  6. **`bundle_id` 缓存后永久丢失（Medium）**：SQLite 增加 `bundle_id` 列并恢复。
+  7. 其他：缓存失败不再静默（返回 `cache_warning` 给前端）、`prune_missing` 防止库无限增长、自定义源移除改用 `key()` 归一化（此前 `/tmp/x` 无法移除 `/tmp/x/`）、去掉 rayon 内嵌套 `thread::spawn().join()` 的无效开销。
+- **前端关键修复**：
+  1. **分轨页此前仍是 Task 4 占位符**（旗舰功能无 UI）→ 实现文件选择、进度轮询、分轨结果列表、demo 模式提示、卸载清理定时器。
+  2. 抽出 `components/ui.tsx` 共享原语（Panel/Button/ProgressBar/EmptyState/ErrorText/displayPath），消除三个页面逐字重复的样式常量。
+  3. 暗色对比度：新增 `--brand-fg`（深色下白字仅 ~3:1）；`color-scheme` 让原生 select/滚动条跟随主题；`select` 样式化（此前暗色下为亮白下拉框）。
+  4. 诊断信息**本地化**（此前直接把 Rust 枚举名 `MissingPath:` 渲染给用户）；设置页去掉硬编码中文与"靠解析中文子串决定颜色"。
+  5. 路由与 URL 双向同步（此前刷新必回市场页并丢失标签）；左栏导航改为 `<button>` + `aria-current`（此前纯 div，键盘不可达）；`<html lang>` 跟随语言。
+  6. 插件页**不再进入即自动全盘扫描**（无法取消且首屏最差体验），改为点击"扫描"触发。
+- **验收**：`cargo test` **57 passed**（35 lib + 6 + 16 含 3 个回归用例）；`cargo check` 0 错误/0 警告；`npm run typecheck`+`build` 通过；i18n 键 **86/86 完全对齐**；`grep -ri stemdeck` 空；release 二进制构建通过。
+- **回归测试有效性已验证**：把 `path_stats` 改回旧实现后 `regression_bundle_plist_edit_invalidates_cache` **确实失败**（非空洞断言）。
+
 ---
 
 ## 5. Free/Pro 边界（plan §五，不变）
