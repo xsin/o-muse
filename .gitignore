@@ -19,3 +19,6 @@ __pycache__/
 # ── Tauri sidecar artifacts ──
 src-tauri/gen
 src-tauri/target
+
+# ── workspace-local cargo home (sandbox: downloads must stay in-tree) ──
+.cargo-home/

@@ -11,7 +11,9 @@
 | Task | 范围 | status | commit |
 |---|---|---|---|
 | Task 0 | 仓库初始化 + 许可证合规 | done | `83eb419` |
-| Task 1 | Rust 后端骨架 | pending | — |
+| Task 0.x | 方向纠正：独立实现，移除 StemDeck 源码依赖 | done | `00fc7cc` |
+| Task 0.y | 项目自身许可证 Apache-2.0：LICENSE + NOTICE 归属 + README | done | — |
+| Task 1 | Rust 后端骨架 | done | — |
 | Task 2 | Python Sidecar（分轨引擎） | pending | — |
 | Task 3 | Kontakt 库管理（只读盘点） | pending | — |
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | pending | — |
@@ -22,7 +24,7 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 1（Rust 后端骨架，前置 Task 0 已完成）。
+**当前应执行**：Task 2（Python Sidecar 分轨引擎，前置 Task 1 已完成；注意 Task 2 原 `commands/stemdeck.rs` 已按方向纠正改至 `commands/stem_separation.rs`）。
 
 > **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
 > 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
@@ -86,11 +88,26 @@
 - `README.md` 含资金声明（逐字）；`.gitignore`（含 `.env`）；首次 commit `[Task 0]`。
 - 验收：无 stemdeckapp 原始 commit；三许可证文件在；NOTICE 含 StemDeck+KLM；README 含"不接受任何资金"；无残留 `.git`；版权头保留。
 
-### Task 1 — Rust 后端骨架（前置：Task 0）
+### Task 1 — Rust 后端骨架（前置：Task 0）✅ done
 - 建 `src-tauri/src/{commands,core/library_manager,core/plugin_scanner,core/license}` 与各 `mod.rs`（含 `placeholder()`）。
+- 按方向纠正，分轨命令模块命名为 `commands/stem_separation.rs`（非 plan 原写的 `commands/stemdeck.rs`），并新增 `core/stem_engine/{sidecar,task}.rs` 承载 sidecar 生命周期与任务模型（参考 StemDeck 设计思路，未复制源码）。
 - `Cargo.toml` 依赖见 §2（版本按 ADR-0001 升级；**quick-xml 0.42 / plist 1.10 / sha2 0.11 / rayon 1.12**）。
 - `lib.rs` 注册 shell/store/sql 插件。
-- 验收：`cargo check` 零错误。禁止写业务逻辑。
+- 验收：`cargo check` 零错误（实际 0 warning / 0 error）。禁止写业务逻辑。
+
+> **Task 1 执行备注（偏差记录）**：
+> 1. **tauri 默认 features**：plan §三 Task 1 写 `tauri = { version = "2", features = [] }`。
+>    但 Tauri 2 的 lib 在 `tauri::generate_context!()`/Builder 构造上依赖默认 `wry` 特性，
+>    关闭 `features=[]` 会导致 `cargo check` 链接/构造失败。已改为保留默认 features 并锁定 `2.12.4`
+>    （ADR-0001 指定的 v2 线）。属构建必要，未改动任何业务逻辑或插件语义。
+> 2. **命令宏唯一性**：Tauri 2 的 `#[tauri::command]` 在 crate 根生成以函数名派生的宏
+>    （`__cmd__placeholder` 等），四个 `placeholder` 命令会 `E0428` 冲突。已改各命令模块占位命令为
+>    唯一命名（`stem_separation_placeholder` / `library_manager_placeholder` / `plugin_scanner_placeholder`
+>    及顶层 `placeholder`），均在 `generate_handler!` 中注册。
+> 3. **沙箱 CARGO_HOME**：DSH 工作区写沙箱禁止写入全局 `~/.cargo/registry`，`cargo` 报
+>    `Operation not permitted`。已设 `CARGO_HOME=/Volumes/Pluto/dev/proj/MuseRig/.cargo-home`（在树内）
+>    并加入 `.gitignore`。后续 cargo 命令需沿用该环境变量。
+> 4. **cargo 退出码陷阱**：`cargo check 2>&1 | tail` 的管道会掩盖真实错误码；改用 `PIPESTATUS[0]` 取 cargo 真实退出码。
 
 ### Task 2 — Python Sidecar（分轨引擎）（前置：Task 1）
 - `python-backend/main.py`：FastAPI `POST /separate`、`GET /status/{id}`(SSE)、`GET /stems/{id}`。

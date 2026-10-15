@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Music Rig",
+  "version": "0.1.0",
+  "identifier": "com.musicrig.app",
+  "build": {
+    "beforeDevCommand": "echo",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "echo",
+    "frontendDist": "dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Music Rig",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "../assets/logo.png"
+    ]
+  }
+}
