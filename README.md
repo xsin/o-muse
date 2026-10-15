@@ -1,16 +1,5 @@
 # Music Rig
 
-> **开源归属声明**
->
-> 本项目基于 [StemDeck](https://github.com/stemdeckapp/stemdeck) 构建，
-> 原项目不接受任何资金、赞助或资助。本项目与 StemDeck 项目及其作者
-> 无官方关联或背书关系。
->
-> 本项目的 Kontakt 库管理能力参考了
-> [KLM](https://github.com/cloinse/klm) 的设计，原项目以 MIT 许可证发布。
-
-（以下为项目自身说明）
-
 ## Music Rig — 工具箱（Toolbox）
 
 Music Rig 是一个跨平台桌面应用（Tauri 2 + React 19），把音乐制作相关的
@@ -20,7 +9,9 @@ Music Rig 是一个跨平台桌面应用（Tauri 2 + React 19），把音乐制�
 首批内置 App：
 
 - **StemDeck** — 本地音频分轨（人声 / 鼓 / 贝斯 / 其他），隐私优先，离线运行。
+  本 App 基于 [StemDeck](https://github.com/stemdeckapp/stemdeck) 构建（Apache-2.0）。
 - **Kontakt Library Manager** — 只读盘点 Kontakt 音源库，诊断缺失路径、重复 SNPID、断卷。
+  本 App 基于 [KLM](https://github.com/cloinse/klm) 构建（MIT）。
 - **Audio Plugin Manager**（v1.1）— 扫描与管理 AU / VST / VST3 / AAX / CLAP 插件。
 
 ## 仓库结构
