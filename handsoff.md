@@ -15,7 +15,7 @@
 | Task 0.y | 项目自身许可证 Apache-2.0：LICENSE + NOTICE 归属 + README | done | — |
 | Task 1 | Rust 后端骨架 | done | `18f58b7` |
 | Task 2 | Python Sidecar（分轨引擎） | done | `f472cc5` |
-| Task 3 | Kontakt 库管理（只读盘点） | done | `TBD` |
+| Task 3 | Kontakt 库管理（只读盘点） | done | `57bea16` |
 | Task 4 | 前端骨架 + 路由 + 工具箱壳 | pending | — |
 | Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | pending | — |
 | Task 6 | v1 集成测试 + 打包 | pending | — |
