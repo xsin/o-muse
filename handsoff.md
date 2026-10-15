@@ -10,7 +10,7 @@
 
 | Task | 范围 | status | commit |
 |---|---|---|---|
-| Task 0 | 仓库初始化 + 许可证合规 | pending | — |
+| Task 0 | 仓库初始化 + 许可证合规 | done | `83eb419` |
 | Task 1 | Rust 后端骨架 | pending | — |
 | Task 2 | Python Sidecar（分轨引擎） | pending | — |
 | Task 3 | Kontakt 库管理（只读盘点） | pending | — |
@@ -22,7 +22,15 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 0（仓库尚未 `git init`，工作区 = `/Volumes/Pluto/dev/proj/MuseRig`）。
+**当前应执行**：Task 1（Rust 后端骨架，前置 Task 0 已完成）。
+
+> **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
+> 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
+> 根级 rsync 会覆盖 `README.md`（含逐字资金声明）并污染根目录。鉴于锁定架构为 **Rust 重新实现**（非 StemDeck fork），
+> 改为将上游源码导入隔离目录 `vendor/stemdeck/`（保留全部原始文件与版权头、零 `.git` 残留），以供归属/可追溯性核查。
+> 其余 Task 0 步骤严格按 plan 执行：`licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}`、`README.md` 含逐字资金声明、
+> `.gitignore`（含 `.env`）、NOTICE 内 commit hash = `5f9405ca68ac31b31ae07ac416141d4d1f7b5f3a`、单次 `[Task 0]` commit（无原始 history）。
+> 工作区 = `/Volumes/Pluto/dev/proj/MuseRig`（plan 中的 `~/projects/music-rig` 为旧路径，已弃用）。
 
 ---
 
