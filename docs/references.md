@@ -83,3 +83,17 @@
 - **URL**: https://github.com/rustsec/plist-rs
 - **许可证**: MIT License
 - **使用方式**: Rust 端解析 Kontakt 偏好 plist（已注册库与路径）的 plist 解析库（Task 3，`src-tauri/Cargo.toml`）。
+
+### 前端依赖（Task 4，仓库根 package.json）
+- **@tauri-apps/api** (`^2.1.1`)：Apache-2.0 OR MIT；Tauri 前端桥接（invoke/events）。
+- **@tauri-apps/plugin-shell** (`^2.0.1`)：Apache-2.0 OR MIT；sidecar 进程管理（前端侧）。
+- **@tauri-apps/plugin-store** (`^2.0.1`)：Apache-2.0 OR MIT；持久化 store（license_key / ui_lang / ui_theme）。
+- **i18next** (`^23.16.4`)：MIT；国际化内核（ADR-0004）。
+- **i18next-browser-languagedetector** (`^8.0.0`)：MIT；浏览器语言检测。
+- **react** (`^18.3.1`) / **react-dom** (`^18.3.1`)：MIT；UI 框架（回退栈，见 handsoff Task 4 偏差）。
+- **react-i18next** (`^14.1.3`)：MIT；React i18n 绑定。
+- **react-router-dom** (`^6.27.0`)：MIT；左栏多开视图路由。
+- **zustand** (`^4.5.5`)：MIT；轻量全局 store（openApps/activeView/theme/lang）。
+- **dev**：`@tauri-apps/cli` (`^2.1.0`, Apache-2.0 OR MIT)、`typescript` (`^5.6.3`, Apache-2.0)、`vite` (`^5.4.10`, MIT)、`@vitejs/plugin-react` (`^4.3.3`, MIT)、`@types/react`/`@types/react-dom` (`^18.3.x`, MIT)。
+
+> 注：前端栈从 plan 的 React19/Vite8/TS7 回退到 React18/Vite5/TS5（tdd.md §7 允许的兜底）。npm 缓存置于仓库内 `.npm-cache/`（沙箱拒写 `~/.npm`）。

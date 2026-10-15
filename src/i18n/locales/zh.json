@@ -1,0 +1,65 @@
+{
+  "app": {
+    "title": "Music Rig"
+  },
+  "nav": {
+    "market": "工具箱",
+    "settings": "设置"
+  },
+  "apps": {
+    "stem_separation": {
+      "name": "分轨分离",
+      "brandPath": "Music Rig / 分轨",
+      "desc": "将音轨拆分为人声、鼓、贝斯与其他分轨。"
+    },
+    "libraries": {
+      "name": "Kontakt 库管理",
+      "brandPath": "Music Rig / 音色库",
+      "desc": "只读盘点你的 Kontakt / Native Instruments 音色库。"
+    },
+    "plugins": {
+      "name": "音频插件管理器",
+      "brandPath": "Music Rig / 插件",
+      "desc": "扫描并整理你的 AU / VST / VST3 / CLAP 插件。",
+      "soon": "即将推出"
+    }
+  },
+  "market": {
+    "heading": "工具箱",
+    "subtitle": "选择一个工具，在新标签页中打开。"
+  },
+  "settings": {
+    "heading": "设置",
+    "language": "语言",
+    "theme": "主题",
+    "tier": "许可",
+    "tierFree": "免费版",
+    "tierPro": "专业版"
+  },
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文"
+  },
+  "library": {
+    "scanning": "正在扫描…",
+    "scan": "扫描音色库",
+    "empty": "未找到任何音色库。",
+    "registered": "已注册",
+    "unregistered": "未注册",
+    "diagnostics": "诊断",
+    "cols": {
+      "name": "名称",
+      "snpid": "SNPID",
+      "path": "路径",
+      "status": "状态"
+    }
+  },
+  "common": {
+    "close": "关闭"
+  }
+}

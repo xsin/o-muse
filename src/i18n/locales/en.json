@@ -1,0 +1,65 @@
+{
+  "app": {
+    "title": "Music Rig"
+  },
+  "nav": {
+    "market": "Toolbox",
+    "settings": "Settings"
+  },
+  "apps": {
+    "stem_separation": {
+      "name": "Stem Separation",
+      "brandPath": "Music Rig / Separate",
+      "desc": "Split a track into vocals, drums, bass and other stems."
+    },
+    "libraries": {
+      "name": "Kontakt Library Manager",
+      "brandPath": "Music Rig / Libraries",
+      "desc": "Read-only inventory of your Kontakt / Native Instruments libraries."
+    },
+    "plugins": {
+      "name": "Audio Plugin Manager",
+      "brandPath": "Music Rig / Plugins",
+      "desc": "Scan and organize your AU / VST / VST3 / CLAP plugins.",
+      "soon": "Coming soon"
+    }
+  },
+  "market": {
+    "heading": "Toolbox",
+    "subtitle": "Pick a tool to open it in a new tab."
+  },
+  "settings": {
+    "heading": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "tier": "License",
+    "tierFree": "Free",
+    "tierPro": "Pro"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文"
+  },
+  "library": {
+    "scanning": "Scanning…",
+    "scan": "Scan libraries",
+    "empty": "No libraries found.",
+    "registered": "Registered",
+    "unregistered": "Not registered",
+    "diagnostics": "Diagnostics",
+    "cols": {
+      "name": "Name",
+      "snpid": "SNPID",
+      "path": "Path",
+      "status": "Status"
+    }
+  },
+  "common": {
+    "close": "Close"
+  }
+}

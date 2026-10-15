@@ -22,3 +22,6 @@ src-tauri/target
 
 # ── workspace-local cargo home (sandbox: downloads must stay in-tree) ──
 .cargo-home/
+
+# ── workspace-local npm cache (sandbox: ~/.npm denied) ──
+.npm-cache/

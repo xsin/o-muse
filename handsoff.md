@@ -16,7 +16,7 @@
 | Task 1 | Rust 后端骨架 | done | `18f58b7` |
 | Task 2 | Python Sidecar（分轨引擎） | done | `f472cc5` |
 | Task 3 | Kontakt 库管理（只读盘点） | done | `57bea16` |
-| Task 4 | 前端骨架 + 路由 + 工具箱壳 | pending | — |
+| Task 4 | 前端骨架 + 路由 + 工具箱壳 | done | `[Task 4]` |
 | Task 5 | Free/Pro 判定 + **Dodo 校验** ⚠️ | pending | — |
 | Task 6 | v1 集成测试 + 打包 | pending | — |
 | Task 7 | 插件目录自动发现 (v1.1) | pending | — |
@@ -24,7 +24,7 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 4（前端骨架 + 工具箱壳；前置 Task 1/2/3 完成）。
+**当前应执行**：Task 5（Free/Pro 判定 + Dodo 校验；前置 Task 1 完成，Task 4 已交付前端壳）。
 
 > **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
 > 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
@@ -141,13 +141,18 @@
 > 4. **KLM 移植标注**：`parser.rs` 头部注明逻辑参考 KLM（MIT）且为独立重写，未复制源码。
 > 5. **`kontakt_preferences_dir()` 命名偏差**：ADR-0002 原签名为 `kontakt_preferences_glob()`，本实现采用更精确的 `kontakt_preferences_dir() -> Option<PathBuf>` + `kontakt_plist_files()`，二者语义等价，待 ADR 同步。
 
-### Task 4 — 前端骨架 + 工具箱壳（前置：Task 1）
-- 用 React+TS+Vite 替换 StemDeck 原 vanilla JS 前端；装 `@tauri-apps/api`、`plugin-shell`、`plugin-store`、`react-router-dom`、i18next 生态（ADR-0004）。
-- **壳改为 PRD §6 模型**：左栏常驻「工具箱」默认项 + 已开 App 标签（多开，✕ 关闭）；右栏卡片网格（App Registry 渲染）。
-- **新增 i18n 初始化 + 双语资源骨架（zh/en）**、CSS 变量主题（亮/暗，系统跟随）；App Registry 文案走 i18n，不写死。
-- `appRegistry.ts`（见 `tdd.md` §3.1）：`stemdeck`(启用)、`libraries`(启用)、`plugins`(v1 disabled "即将推出")。
-- `zustand` store：`openApps`、`activeView`。
-- 验收：`npm run build` 通过。禁止写 Tauri Command 调用。
+### Task 4 — 前端骨架 + 工具箱壳（前置：Task 1）✅ done
+- 用 React+TS+Vite 替换原 vanilla 前端；装 `@tauri-apps/api`、`plugin-shell`、`plugin-store`、`react-router-dom`、i18next 生态（ADR-0004）。
+- **壳改为 PRD §6 模型**：左栏常驻「工具箱」默认项 + 已开 App 标签（多开，✕ 关闭）；右栏卡片网格（App Registry 渲染）。`zustand` store：`openApps`、`activeView`、`theme`、`lang`。
+- **新增 i18n 初始化 + 双语资源骨架（zh/en）**、CSS 变量主题（`tokens.css` 亮/暗，系统跟随）；App Registry 文案走 i18n，不写死。
+- `appRegistry.ts`（见 `tdd.md` §3.1）：`stem_separation`(启用)、`libraries`(启用)、`plugins`(v1 disabled "即将推出")。
+- Library 页已接入 `invoke("scan_libraries")` 实际调用（非占位）；Stem/Plugin 页为 UI 占位。
+- 验收：`npm run build` 通过 + `npm run typecheck` 0 错误 + `cargo check` 仍 0 错误；`grep -ri stemdeck src-tauri src python-backend` 空。
+- **偏差记录（Task 4）**：
+  - 前端栈从 plan 的 React19/Vite8/TS7 **回退到 React18.3 / Vite5.4 / TS5.6**（tdd.md §7 允许的兜底），因前沿组合与 `@tauri-apps/cli`/Tauri 模板存在真实摩擦风险；记录于此。
+  - **强制命名**：appRegistry 的 id/route 统一为 `stem_separation`（非 `stemdeck`），符合"代码不得出现 stemdeck"硬规范；tdd.md §3.1 示例里的 `id:'stemdeck'` 仅为示例，以本实现为准。
+  - `tauri.conf.json`：`beforeDevCommand= npm run dev`、`beforeBuildCommand= npm run build`、`frontendDist="../dist"`（devUrl 仍 5173）。
+  - npm 缓存因沙箱拒写 `~/.npm`，改设 `npm_config_cache=.npm-cache/`（已 gitignore）。
 
 ### Task 5 — Free/Pro 判定 + **Dodo 校验**（前置：Task 1）⚠️ ADR-0003 覆盖原"不做网络校验"
 - `license/mod.rs`：`LicenseTier{Free,Pro}`；`current_tier() async` 读 `store.license_key` → **Dodo API** 校验（`DODO_API_KEY`+`DODO_PRODUCT_ID`）→ 推导；无 key/失败→`Free`（带 TTL 缓存）。
