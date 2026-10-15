@@ -24,7 +24,7 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | pending | — |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | pending | — |
 
-**当前应执行**：Task 6（v1 集成测试 + 打包；前置 Task 0–5 完成）。
+**当前应执行**：v1 范围（Task 0–6）已全部完成并提交。Task 7–10 属 v1.1（插件扫描器），按用户指示本次**不在范围内**，暂停于此直至下一步指令。
 
 > **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
 > 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
