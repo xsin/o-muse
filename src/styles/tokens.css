@@ -44,3 +44,13 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+
+/* 不确定进度条（插件扫描） */
+@keyframes mr-indet {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}

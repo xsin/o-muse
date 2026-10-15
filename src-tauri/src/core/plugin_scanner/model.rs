@@ -102,10 +102,14 @@ impl ScanSource {
         }
     }
 
-    /// 判重键：同一路径 + 同一格式视为同一源。
+    /// 判重键：一个目录就是一个源，与其检测出的格式无关。
+    ///
+    /// 故**仅按路径**判重（去掉结尾斜杠以容忍 `/a/b` 与 `/a/b/`）。
     pub fn key(&self) -> String {
-        let p = self.path.to_string_lossy().to_string();
-        format!("{}|{}", self.plugin_format.as_str(), p.trim_end_matches('/'))
+        self.path
+            .to_string_lossy()
+            .trim_end_matches('/')
+            .to_string()
     }
 }
 

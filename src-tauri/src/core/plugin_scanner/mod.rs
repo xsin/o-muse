@@ -4,6 +4,7 @@
 // （tdd.md §3.3 全局禁止）——所有信息来自 plist 文本与文件头字节。
 
 pub mod cache;
+pub mod custom;
 pub mod discover;
 pub mod extract;
 pub mod model;

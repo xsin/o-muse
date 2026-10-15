@@ -32,9 +32,8 @@ export const appRegistry: AppDef[] = [
     id: "plugins",
     route: "/apps/plugins",
     icon: "🎛️",
-    enabled: false,
+    enabled: true,
     minVersion: "1.1",
-    badge: "soon",
   },
 ];
 

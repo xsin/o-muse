@@ -19,6 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             commands::placeholder,
@@ -31,6 +32,9 @@ pub fn run() {
             commands::plugin_scanner::list_scan_sources,
             commands::plugin_scanner::scan_all_plugins,
             commands::plugin_scanner::scan_plugins_by_format,
+            commands::plugin_scanner::add_custom_plugin_dir,
+            commands::plugin_scanner::remove_custom_plugin_dir,
+            commands::plugin_scanner::rescan_plugins,
             commands::license::get_tier,
             commands::license::activate_license_key,
         ])
