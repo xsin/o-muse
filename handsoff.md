@@ -209,6 +209,36 @@
 - **验收**：`cargo test` **57 passed**（35 lib + 6 + 16 含 3 个回归用例）；`cargo check` 0 错误/0 警告；`npm run typecheck`+`build` 通过；i18n 键 **86/86 完全对齐**；`grep -ri stemdeck` 空；release 二进制构建通过。
 - **回归测试有效性已验证**：把 `path_stats` 改回旧实现后 `regression_bundle_plist_edit_invalidates_cache` **确实失败**（非空洞断言）。
 
+### 分发方案（公测期，不使用 Developer ID）✅ done
+- **修复真实阻断问题**：`src-tauri/src/main.rs` 缺失 → crate 为 lib-only，
+  `cargo build --bins` 无目标、Tauri CLI 报 `can't open main binary`，
+  **`.app`/`.dmg` 打包自 Task 6 起一直失败**。已补齐 `main.rs`（调用 `music_rig_lib::run()`）。
+  补齐后 `tauri build` 成功产出 `Music Rig.app`（含 sidecar）。
+- **方案文档**：`docs/tech-release-without-developer-id.md`。
+- **安装脚本** `scripts/release/install.sh`（同步至 `releases/latest/install.sh`）：
+  `set -euo pipefail` + mktemp/trap；`uname -m` 架构检测、universal 优先；
+  `curl -fL --retry 3`；SHA256 校验（checksums.txt → .sha256 回退）；
+  `ditto -x -k`；`pkill -x` 退出旧版；默认 `~/Applications`（无 sudo），
+  `--system` 走 `/Applications`；`xattr -dr com.apple.quarantine`；
+  参数 `--version/--install-dir/--no-launch/--system`；VERSION.txt 解析 latest。
+- **打包脚本** `scripts/release/build.sh`：由内到外 ad-hoc 签名
+  （sidecar → frameworks → 嵌套 app → 外层 bundle），再 `codesign --verify --deep --strict`；
+  `ditto -c -k --keepParent` zip + sha256 + checksums.txt + VERSION.txt；可选 dmg。
+  `SIGN_IDENTITY`（当前 `-`）/`NOTARIZE`（0）/`APPLE_ID`/`TEAM_ID`/`APP_SPECIFIC_PASSWORD`
+  已参数化，公证分支为 no-op 预留。
+- **CI** `.github/workflows/release.yml`：push `v*` tag 触发，上传 GitHub Releases，
+  `latest/install.sh` 稳定入口；版本号从 `tauri.conf.json` 读取（`lib/version.sh`）。
+- **本地已验证**（对真实 `Music Rig.app`）：
+  ad-hoc 签名 + `codesign --verify --deep --strict` 通过；
+  `curl … | bash` 全流程成功安装；架构回退正常；
+  **篡改 zip 被拒绝**（exit 1）；**覆盖更新为全新替换**（inode 变化、陈旧文件清除、签名仍有效）；
+  `--version`/`--help`/非法参数行为正确；三个脚本 `shellcheck` 零告警。
+- **Dodo 影响**：无。license 存于 tauri-plugin-store（Application Support 普通文件，
+  **非 Keychain**），签名方式切换不会导致授权失效，无需迁移逻辑。
+- **已知限制**：沙箱内 `hdiutil` 被拒（dmg 无法本地生成，属环境限制非代码问题）；
+  universal 需 `x86_64-apple-darwin` target；`<domain>` 为占位符，接入托管后替换
+  （可用 `MUSIC_RIG_BASE_URL` 覆盖）。
+
 ---
 
 ## 5. Free/Pro 边界（plan §五，不变）
