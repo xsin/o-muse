@@ -112,3 +112,23 @@
 ### @tauri-apps/plugin-dialog（Task 9，v1.1，前端）
 - **许可证**: MIT
 - **使用方式**: `PluginManagerPage` 中调用 `open({directory:true})` 选择插件目录。
+
+### flate2 / tar（v1.2）
+- **URL**: https://github.com/rust-lang/flate2 、 https://github.com/alexcrichton/tar-rs
+- **许可证**: MIT / Apache 2.0 双许可
+- **使用方式**: 纯 Rust 解压自包含 CPython 归档（`src-tauri/Cargo.toml`）。用 Rust 库而非外部 `tar` 进程，符合"外部进程统一走 tauri-plugin-shell"的约定。
+
+### libc（v1.2）
+- **URL**: https://github.com/rust-lang/libc
+- **许可证**: MIT / Apache 2.0 双许可
+- **使用方式**: 通过 `statfs` 估算磁盘可用空间，安装分轨运行时前做余量检查（`src-tauri/Cargo.toml`）。
+
+### python-build-standalone（v1.2，运行时来源）
+- **URL**: https://github.com/astral-sh/python-build-standalone
+- **许可证**: Python-2.0 / PSF（CPython 自身许可）
+- **使用方式**: 按需下载自包含 CPython 3.12.15 作为分轨运行时；**按固定 SHA256 校验**后才使用（见 `core/stem_engine/runtime.rs`）。不随安装包分发，仅在用户启用分轨时下载。
+
+### htdemucs 模型权重（v1.2，运行时资产）
+- **URL**: https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th
+- **许可证**: MIT（Demucs 项目）
+- **使用方式**: 由 Rust 端主动下载并按固定 SHA256 校验，落位到 `<runtime>/torch-home/hub/checkpoints/`，使分轨装完即可离线运行。

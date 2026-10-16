@@ -164,7 +164,7 @@ bash install.sh
 - 清晰日志：版本、架构、安装路径、校验结果
 - **覆盖更新不删用户数据**：安装只替换 `.app` bundle；O Muse 的
   用户数据（license key、UI 偏好、插件缓存）位于
-  `~/Library/Application Support/com.omuse.desktop/`，**不在** bundle 内，
+  `~/Library/Application Support/work.xsin.omuse/`，**不在** bundle 内，
   因此覆盖安装天然不影响数据。
 
 ### 5.3 签名顺序（不只用 `--deep`）

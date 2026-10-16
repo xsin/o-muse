@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { useUI } from "../store/useUI";
 import {
   Panel,
   Button,
@@ -42,6 +43,8 @@ function formatBytes(n: number): string {
 
 export default function StemSeparationPage() {
   const { t } = useTranslation();
+  const setActive = useUI((s) => s.setActive);
+  const [runtimeReady, setRuntimeReady] = useState<boolean | null>(null);
   const [filePath, setFilePath] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
@@ -59,6 +62,13 @@ export default function StemSeparationPage() {
 
   // 卸载时清理轮询，避免定时器泄漏
   useEffect(() => stopPolling, [stopPolling]);
+
+  // 运行时是否就绪：未就绪时给出明确引导，而不是让用户点下去再失败
+  useEffect(() => {
+    invoke<{ stage: string }>("runtime_status")
+      .then((s) => setRuntimeReady(s.stage === "ready"))
+      .catch(() => setRuntimeReady(null));
+  }, []);
 
   const poll = useCallback(
     (id: string) => {
@@ -129,6 +139,23 @@ export default function StemSeparationPage() {
         </p>
       </div>
 
+      {runtimeReady === false && (
+        <Panel
+          style={{
+            borderColor: "var(--brand)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <span style={{ fontSize: 13 }}>{t("stem.needRuntime")}</span>
+          <Button onClick={() => setActive("settings")}>
+            {t("stem.goSettings")}
+          </Button>
+        </Panel>
+      )}
+
       {/* 文件选择 */}
       <Panel>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -149,7 +176,11 @@ export default function StemSeparationPage() {
           >
             {filePath ?? t("stem.noFile")}
           </span>
-          <Button variant="primary" onClick={start} disabled={!filePath || running}>
+          <Button
+            variant="primary"
+            onClick={start}
+            disabled={!filePath || running || runtimeReady === false}
+          >
             {running ? t("stem.separating") : t("stem.start")}
           </Button>
         </div>

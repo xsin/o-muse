@@ -98,7 +98,7 @@ bash install.sh
 
 **更新：** 重新运行同一条安装命令即可，会覆盖旧版本并**保留你的数据**
 （license、界面偏好、插件缓存位于
-`~/Library/Application Support/com.omuse.desktop/`，不在应用包内）。
+`~/Library/Application Support/work.xsin.omuse/`，不在应用包内）。
 
 > 分发与签名的完整技术方案见
 > [`docs/tech-release-without-developer-id.md`](docs/tech-release-without-developer-id.md)。

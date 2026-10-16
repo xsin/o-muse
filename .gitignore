@@ -35,3 +35,6 @@ releases/latest/*
 
 # 本地临时安装测试目录（不入库）
 .tmp-*/
+
+# pip 缓存（沙箱：避免写入用户主目录）
+.pip-cache/

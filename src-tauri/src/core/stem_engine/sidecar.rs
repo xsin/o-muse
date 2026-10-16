@@ -47,12 +47,27 @@ pub fn ensure_sidecar(app: &tauri::AppHandle) -> crate::core::stem_engine::task:
             if slot.is_some() {
                 return None; // 已在运行，直接复用
             }
-            Some(
-                app.shell()
+            Some((|| {
+                // 把托管运行时路径传给启动器：让它使用我们自举的 venv 解释器，
+                // 并把模型缓存指到运行时目录（而不是用户的 ~/.cache/torch）。
+                let mut cmd = app
+                    .shell()
                     .sidecar(SIDECAR_NAME)
-                    .map_err(|e| format!("{e:?}"))
-                    .and_then(|c| c.spawn().map_err(|e| format!("{e:?}"))),
-            )
+                    .map_err(|e| format!("{e:?}"))?;
+                if let Ok(root) = crate::core::stem_engine::runtime::runtime_root(app) {
+                    if crate::core::stem_engine::runtime::venv_python(&root).exists() {
+                        cmd = cmd
+                            .env("OMUSE_RUNTIME_DIR", root.to_string_lossy().to_string())
+                            .env(
+                                "TORCH_HOME",
+                                crate::core::stem_engine::runtime::torch_home(&root)
+                                    .to_string_lossy()
+                                    .to_string(),
+                            );
+                    }
+                }
+                cmd.spawn().map_err(|e| format!("{e:?}"))
+            })())
         });
 
     let mut rx = match spawn_result {

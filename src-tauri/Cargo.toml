@@ -38,4 +38,9 @@ chrono = { version = "0.4.45", features = ["serde"] }
 walkdir = "2.5.0"
 rayon = "1.12.0"
 sha2 = "0.11.1"
+# 运行时自举：解压自包含 CPython 归档（纯 Rust，不经外部进程）
+flate2 = "1.1"
+tar = "0.4"
+# statfs 磁盘余量检查
+libc = "0.2"
 thiserror = "2.0.21"

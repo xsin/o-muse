@@ -52,3 +52,40 @@ pub async fn stem_results(app: tauri::AppHandle, job_id: String) -> Result<Stems
     .await
     .map_err(|e| format!("获取分轨结果异常: {e}"))?
 }
+
+// ── 分轨运行时自举（v1.2）────────────────────────────────────
+//
+// 分轨依赖 PyTorch（约 151MB）与模型权重（约 84MB），远大于应用本体，
+// 故不在安装包内分发，而是在首次使用时按需自举（详见
+// docs/tech-release-without-developer-id.md 与 prd/tdd 的运行时章节）。
+
+use crate::core::stem_engine::runtime as rt;
+
+/// 查询分轨运行时状态（不发起网络请求）。
+#[tauri::command]
+pub fn runtime_status(app: tauri::AppHandle) -> rt::RuntimeStatus {
+    rt::detect(&app)
+}
+
+/// 安装/修复分轨运行时。耗时较长，走 spawn_blocking 并推送进度事件。
+#[tauri::command]
+pub async fn install_runtime(app: tauri::AppHandle) -> Result<rt::RuntimeStatus, String> {
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let emit_handle = handle.clone();
+        rt::install(&handle, move |p| {
+            use tauri::Emitter;
+            let _ = emit_handle.emit(rt::PROGRESS_EVENT, p);
+        })
+    })
+    .await
+    .map_err(|e| format!("安装任务异常: {e}"))?
+}
+
+/// 卸载分轨运行时（回收约 900MB 磁盘）。
+#[tauri::command]
+pub async fn remove_runtime(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || rt::remove(&app))
+        .await
+        .map_err(|e| format!("卸载任务异常: {e}"))?
+}

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useUI, type ThemeMode } from "../store/useUI";
 import { OkText, ErrorText, Button, Panel } from "../components/ui";
+import RuntimeSection from "../components/RuntimeSection";
 
 interface TierInfo {
   tier: "free" | "pro";
@@ -138,6 +139,9 @@ export default function SettingsPage() {
             </div>
           ))}
       </Panel>
+
+      {/* 分轨运行时：按需自举的 PyTorch 环境 */}
+      <RuntimeSection />
     </div>
   );
 }

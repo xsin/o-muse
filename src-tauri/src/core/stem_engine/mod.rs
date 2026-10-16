@@ -5,5 +5,6 @@
 //   其设计参考上游参考项目的 backend watchdog 机制（仅架构参考，未复制源码）。
 // - task.rs：分轨任务的标识、状态与结果路径管理。
 
+pub mod runtime;
 pub mod sidecar;
 pub mod task;
