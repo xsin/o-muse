@@ -50,7 +50,7 @@ export default function App() {
   }, [activeView]);
 
   return (
-    <Toast.Provider>
+    <>
       <div className="flex h-full flex-col bg-background text-foreground">
         {/* 有可用更新时在顶部显示非模态提示条（自动检查 + 一键更新） */}
         <UpdateBanner />
@@ -69,6 +69,11 @@ export default function App() {
           </main>
         </div>
       </div>
-    </Toast.Provider>
+
+      {/* HeroUI 3 的 Toast 区域必须是**兄弟节点**，不能包裹应用：
+          作为 wrapper 时其子元素完全不会被渲染（实测导致整个界面白屏）。
+          toast() 是命令式 API，只需在此挂一个区域承载提示。 */}
+      <Toast.Provider />
+    </>
   );
 }
