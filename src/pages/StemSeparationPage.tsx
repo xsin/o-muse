@@ -277,7 +277,7 @@ export default function StemSeparationPage() {
       )}
 
       {/* 文件选择 */}
-      <Section title={t("apps.stem_separation.name")}>
+      <Section title={t("stem.sourceTitle")}>
         <div className="flex flex-wrap items-center gap-3">
           <SecondaryButton onPress={() => void pick()} isDisabled={running}>
             {t("stem.pickFile")}
