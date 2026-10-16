@@ -10,7 +10,7 @@
 | 桌面壳 | Tauri 2 | crate 2.12.4 / js 2.12.3 / cli 2.12.3 | v3 仍 alpha，保持 v2 线 |
 | 插件 | plugin-shell / store / sql | 2.5.0 / 2.5.0 / 2.6.0 | sql 用 `features=["sqlite"]` |
 | 后端主逻辑 | Rust | 1.99 | 新增模块全用 Rust |
-| 分轨引擎 | Python 3.14 + FastAPI | fastapi 0.143.1 / uvicorn 0.54.0 / demucs 4.1.0 / librosa 1.0.0 / pyloudnorm 0.2.0 | Sidecar 进程 |
+| 分轨引擎 | Python + FastAPI（Sidecar） | 开发态 Python 3.14；运行态自举 CPython 3.12.15 | 运行时依赖锁定于 `requirements-runtime.txt`：fastapi 0.143.2 / uvicorn 0.54.0 / demucs 4.1.0 / numpy ≥1.26,<2（不含 librosa/pyloudnorm） |
 | 前端 | React 19 + TS 7 + Vite 8 + TailwindCSS 4 | react 19.3.1 / react-dom 19.3.1 / react-router-dom 7.18.4 / vite 8.3.4 / @vitejs/plugin-react 6.1.2 / typescript 7.0.2 / zustand 5.0.15 | |
 | 本地存储 | SQLite via tauri-plugin-sql | 2.6.0 | |
 | 计费 | Dodo Payments | — | Test Mode Key 已备（ADR-0003） |
@@ -18,6 +18,8 @@
 | 主题 | CSS 变量 + `data-theme`，系统跟随 | — | 亮/暗双主题（PRD FR-9） |
 
 Rust 辅助依赖（按 ADR-0001 升级）：`serde 1.0.229`、`serde_json 1`、`quick-xml 0.42.0`、`plist 1.10.1`、`chrono 0.4.45`、`walkdir 2.5.0`、`rayon 1.12.0`、`sha2 0.11.1`（⚠️ breaking）、`thiserror 2.0.21`。
+
+运行时自举另用：`reqwest 0.12`（带进度回调的下载）、`flate2 1.1` + `tar 0.4`（纯 Rust 解压归档，不经外部进程）、`libc 0.2`（`statfs` 估算磁盘余量）。
 
 ## 2. 目录结构（最终形态，沿用 plan §1.5）
 
@@ -38,15 +40,17 @@ music-rig/
 │   │   │   │   ├── mod.rs model.rs parser.rs diagnose.rs mutate.rs(Pro)
 │   │   │   ├── plugin_scanner/    # v1.1
 │   │   │   │   ├── mod.rs model.rs discover.rs extract.rs cache.rs
+│   │   │   ├── stem_engine/       # 【v1.2】runtime.rs 自举 / sidecar.rs 进程 / task.rs 任务
 │   │   │   └── license/mod.rs     # Free/Pro 判定 + Dodo 校验（ADR-0003）
 │   │   ├── Cargo.toml
 │   │   └── tauri.conf.json
+│   ├── bin/                       # externalBin：python-stem-backend 启动器
 │   ├── src/                       # React 前端
-│   │   ├── pages/ (StemDeck/, LibraryManager/, PluginManager/)
-│   │   ├── components/  stores/   appRegistry.ts  # 【新增, Q9 轻量注册表】
+│   │   ├── pages/ (StemSeparationPage.tsx, LibraryManagerPage.tsx, PluginManagerPage.tsx, SettingsPage.tsx)
+│   │   ├── components/ (ui.tsx, RuntimeSection.tsx)  store/  appRegistry.ts  # 【新增, Q9 轻量注册表】
 │   │   ├── i18n/ (index.ts, locales/en.json, locales/zh.json)  # 【新增, ADR-0004】
 │   │   └── styles/ (tokens.css)   # CSS 变量令牌（亮/暗主题）
-│   ├── python-backend/ (main.py, demucs_runner.py, requirements.txt)
+│   ├── python-backend/ (main.py, server.py, separator.py, requirements.txt, requirements-runtime.txt)
 │   ├── licenses/ (APACHE-2.0.txt, MIT.txt, NOTICE)
 │   ├── .env.example               # DODO_* 模板（.env 本身 gitignore）
 │   ├── .gitignore                 # 含 .env, node_modules, target, dist
@@ -60,7 +64,7 @@ music-rig/
 ```ts
 export interface AppDef {
   id: 'stem_separation' | 'libraries' | 'plugins';
-  name: string;          // "StemDeck" / "Kontakt Library Manager" / "Audio Plugin Manager"
+  name: string;          // "Stem Separation" / "Kontakt Library Manager" / "Audio Plugin Manager"
   brandPath: string;     // "O Muse / Separate" 等
   route: string;         // "/apps/stem_separation" ...
   icon: string;          // svg path / asset
@@ -155,19 +159,45 @@ runtime/
 注意 macOS 自带仅 Python 3.9.6（且为 Xcode CLT 转发桩），而当前 PyTorch 需 3.10+，
 故系统 Python **不满足**依赖，仅为兜底。
 
-**sidecar 失败直报**：捕获子进程 stderr 尾部；进程秒退时立即失败并回传真实原因
-（缺运行时/缺依赖/缺源码），不再干等 30s 健康检查超时。
+**sidecar 失败直报**：捕获子进程 stderr 尾部；进程秒退时**立即**失败并回传真实原因
+（缺运行时/缺依赖/缺源码），而不是干等 30s 健康检查超时。
 
 **依赖双文件**：
 - `python-backend/requirements.txt` —— 开发态松散约束（含可选/预留依赖）
 - `python-backend/requirements-runtime.txt` —— 运行时精简锁定集
 
-精简理由：`librosa` / `pyloudnorm` / `soundfile` 当前代码未使用（原为响度对齐预留），
-其中 librosa 会引入 numba/llvmlite 等大体积包，故运行时不再安装。
+精简理由：`librosa` / `pyloudnorm` / `soundfile` 仅为响度对齐能力的预留依赖，当前代码并未使用；
+其中 librosa 会引入 numba/llvmlite 等大体积包，故运行时精简集不安装。
 
 **测试覆盖**（`cargo test --lib runtime`，9 例）：URL 与 SHA 自洽性、路径布局、
 `.ready` 语义、解压往返，以及**hermetic 下载校验**（本地一次性 HTTP 服务器：
 正常下载 + 哈希不匹配时拒绝并清理临时文件）。
+
+**Tauri 命令**（`src-tauri/src/commands/stem_separation.rs`）：
+
+```rust
+#[tauri::command] pub fn runtime_status(app) -> RuntimeStatus                 // 探测，不发网络请求
+#[tauri::command] pub async fn install_runtime(app) -> Result<RuntimeStatus> // spawn_blocking + 进度事件
+#[tauri::command] pub async fn remove_runtime(app) -> Result<()>             // 删除 <app data>/runtime
+```
+
+三者均为耗时阻塞操作，一律 `async` + `spawn_blocking`，不占 Tauri 主线程；
+`install` 的 emit 回调转成 `app.emit(PROGRESS_EVENT, payload)` 推给前端。
+
+**固定版本与校验**：自包含 CPython `3.12.15`，取自 python-build-standalone 的
+release tag `20261013`，归档名 `cpython-3.12.15+20261013-<triple>-install_only.tar.gz`
+（URL 中的 `+` 转义为 `%2B`）；arm64 与 x86_64 **各有一个固定 SHA256 常量**。
+htdemucs 权重 `955717e8-8726e21a.th` 也按固定 SHA256 校验。
+
+**运行时位置**：固定在 `<app data>/runtime/`（macOS 即
+`~/Library/Application Support/work.xsin.omuse/runtime/`），不写进 `.app`。
+收益：安装包保持 ~21MB；`.app` 覆盖升级不清理用户数据目录，运行时得以保留；
+卸载即整目录回收。
+
+**打包**：`tauri.conf.json` 的 `bundle.resources` 把 `../python-backend` 映射为
+`Contents/Resources/python-backend`——安装包只带源码、不带任何 wheel；
+`bundle.externalBin` 注册 `bin/python-stem-backend` 启动器。
+`requirements-runtime.txt` 优先从资源目录读取，开发态回退仓库根。
 
 ## 4. 首页/壳层实现（PRD §6）
 - 左栏常驻（232px）；`market` 默认项 + 动态 `openApps` 标签（多开，✕ 关闭）。
@@ -186,19 +216,30 @@ runtime/
 - `document.documentElement.dataset.theme` 初始化：store `ui_theme` → 系统 `prefers-color-scheme` → 默认亮。
 - 主题仅 CSS 变量作用域，无 JS 重渲染；切换写 store 并持久化，原型 `prototype/home.html` 已验证交互。
 
+## 4.3 分轨运行时引导（前端，PRD FR-3.1）
+- `src/components/RuntimeSection.tsx`（设置页区块）：展示当前阶段文案与进度条、实际占用与预计下载体积，
+  提供「下载并安装 / 重新安装」「卸载」（卸载前二次确认）；进度经
+  `listen('omuse://runtime-progress')` 推送更新，前端不轮询。
+- `src/pages/StemSeparationPage.tsx`：挂载时 `invoke('runtime_status')`；未就绪
+  （`stage !== 'ready'`）时显示引导横幅、禁用「开始分轨」，横幅按钮跳转设置页。
+- 文案全部走 i18n：`runtime.*`（`title / desc / stages.* / install / reinstall / remove / confirmRemove / estimate`）
+  与 `stem.needRuntime`、`stem.goSettings`。
+
 ## 5. 许可证合规（plan §六，强制）
-- `licenses/APACHE-2.0.txt`、`MIT.txt`、`NOTICE` 不可修改；NOTICE 记 StemDeck commit hash。
-- 复制自 StemDeck 的文件保留原始 `Copyright` 头（`grep -r "Copyright" src-tauri/`）。
+- `licenses/APACHE-2.0.txt`、`MIT.txt`、`NOTICE` 不可修改；NOTICE 记上游参考项目的 commit hash。
+- 复制自上游参考项目的文件保留原始 `Copyright` 头（`grep -r "Copyright" src-tauri/`）。
 - KLM 移植逻辑顶部注释 `// Ported from KLM (https://github.com/cloinse/klm) under MIT License`。
 - Pro 模块不含 Apache-2.0 原始代码；`Cargo.toml` 不引入 GPL/AGPL。
-- `README.md` 含"原项目不接受资金支持"声明；`git log` 无 stemdeckapp 原始 commit。
+- `README.md` 含"上游参考项目不接受资金支持"声明；`git log` 无上游参考项目原始 commit。
 
 ## 6. 全局禁止（plan §二）
 - 不运行 `sudo`/`su`/提权；不调用 `powershell`、`bash -c` 执行外部命令。
 - Rust 中不得用 `std::process::Command` 启动非 Sidecar 进程（Python sidecar 除外）。
-- 不修改 `licenses/`；Pro 模块不引用 Apache-2.0 原始文件；不恢复 StemDeck Git 历史。
+- 不修改 `licenses/`；Pro 模块不引用 Apache-2.0 原始文件；不恢复上游参考项目 Git 历史。
 
 ## 7. 执行顺序与升级风险
 - 逐 Task 执行（见 `handsoff.md`）：Task 0→1→2→3→4→5→6（v1），Task 7→8→9→10（v1.1）。
+- 分轨运行时自举（v1.2）在 v1 链路打通后落地：`core/stem_engine/runtime.rs`（自举）+
+  `commands/stem_separation.rs` 的三个运行时命令 + 设置页 `RuntimeSection` + 分轨页未就绪引导。
 - 升级风险（ADR-0001）：`sha2 0.11` 改 hash 调用；React19/Vite8/TS7 若与 Tauri 模板摩擦，兜底回退 React18+Vite5，并在该 Task 记录。
 - Dodo 集成（ADR-0003）替代 plan Task 5 的"不做网络校验"。
