@@ -98,13 +98,17 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     echo "[build] 构建 universal（lipo 合并两个架构）"
     for t in $RUST_TARGETS; do
       echo "[build] 目标：$t"
+      # 必须**不加** --no-bundle：--no-bundle 只产出可执行文件、不产出 .app，
+      # 后面的 find 会找不到 bundle 而直接失败。
       (cd "$REPO_ROOT" && CARGO_HOME="${CARGO_HOME:-$REPO_ROOT/.cargo-home}" \
         npm_config_cache="${npm_config_cache:-$REPO_ROOT/.npm-cache}" \
-        node_modules/.bin/tauri build --target "$t" --no-bundle --ci)
+        node_modules/.bin/tauri build --target "$t" --ci)
     done
-    # 取 arm64 产物为基准，把主可执行 lipo 成 universal
-    ARM_APP="$(find "$REPO_ROOT/src-tauri/target/aarch64-apple-darwin/release" -maxdepth 1 -name "*.app" | head -n1)"
-    X86_APP="$(find "$REPO_ROOT/src-tauri/target/x86_64-apple-darwin/release" -maxdepth 1 -name "*.app" | head -n1)"
+    # 取两个架构的 .app，以 arm64 为基准把可执行文件 lipo 成 universal
+    ARM_APP="$(find "$REPO_ROOT/src-tauri/target/aarch64-apple-darwin/release/bundle/macos" \
+      -maxdepth 1 -name "*.app" 2>/dev/null | head -n1)"
+    X86_APP="$(find "$REPO_ROOT/src-tauri/target/x86_64-apple-darwin/release/bundle/macos" \
+      -maxdepth 1 -name "*.app" 2>/dev/null | head -n1)"
     [ -n "$ARM_APP" ] || { echo "未找到 arm64 .app" >&2; exit 1; }
     APP_BUNDLE="$OUT_DIR/stage-universal"
     rm -rf "$APP_BUNDLE"
@@ -112,14 +116,25 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     ditto "$ARM_APP" "$APP_BUNDLE/${APP_NAME}.app"
     if [ -n "$X86_APP" ]; then
       find "$APP_BUNDLE/${APP_NAME}.app/Contents/MacOS" -type f 2>/dev/null | while read -r arm_bin; do
+        # rel 形如 "Contents/MacOS/o-muse"；它相对 .app 根，
+        # 故直接拼到 X86_APP 上（此前误写成 "$X86_APP/Contents/${rel#MacOS/}"，
+        # 会产生 .../Contents/Contents/MacOS/... 这种不存在的路径，
+        # 导致 lipo 从不执行、却仍报"合并完成"——静默产出 arm64-only 的假 universal 包）。
         rel="${arm_bin#"$APP_BUNDLE/${APP_NAME}".app/}"
-        x86_bin="$X86_APP/Contents/${rel#MacOS/}"
+        x86_bin="$X86_APP/$rel"
         if [ -f "$x86_bin" ]; then
           lipo -create "$arm_bin" "$x86_bin" -output "$arm_bin.tmp" && mv "$arm_bin.tmp" "$arm_bin"
           echo "merged: $(basename "$arm_bin")"
         fi
       done
       echo "[build] lipo 合并完成"
+      # 至少合并了一个可执行文件才算 universal；否则宁可失败也不要
+      # 产出名不副实的"universal"包（清单会把它标给两个架构）。
+      MERGED_MAIN="$(lipo -archs "$APP_BUNDLE/${APP_NAME}.app/Contents/MacOS/${APP_NAME}" 2>/dev/null || true)"
+      case "$MERGED_MAIN" in
+        *arm64*x86_64*|*x86_64*arm64*) echo "[build] 主可执行文件架构: $MERGED_MAIN" ;;
+        *) echo "[build] 错误：主可执行文件未成为 universal（实际：${MERGED_MAIN:-未知}）" >&2; exit 1 ;;
+      esac
     else
       echo "[build] 警告：未找到 x86_64 .app，universal 包将只含 arm64" >&2
     fi
@@ -274,43 +289,53 @@ fi
 TARGZ_SHA="$(awk '{print $1}' "$TARGZ_PATH.sha256")"
 echo "[pack] tar.gz SHA256: ${TARGZ_SHA}"
 
-# ---- 6.6 latest.json（自动更新清单）-----------------------------------
-# version 与 tauri.conf.json 单一来源；sha256 取自刚生成的 .sha256。
+# ---- 6.6 latest.json（自动更新清单，支持多架构合并）-------------------
+# 用 python3 生成，因为它需要**合并**已有清单：CI 会分别构建 arm64 与 x86_64
+# （两条单架构路径都已实测），第二次运行必须把新平台追加进去而不是覆盖。
 LATEST_JSON="$OUT_DIR/latest.json"
 RELEASE_BASE="${OMUSE_RELEASE_BASE:-https://xsin.github.io/o-muse/releases}"
 PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-TARGZ_URL="${RELEASE_BASE}/${VERSION}/$(printf '%s' "$TARGZ_NAME" | sed 's/ /%20/g')"
 
 # 平台键必须与客户端一致：Rust 端按 std::env::consts::ARCH 映射，
 # aarch64 → darwin-aarch64、x86_64 → darwin-x86_64。
 # 注意产物命名用的是 "arm64"，与平台键的 "aarch64" **不同**，切勿混用。
 case "$ARCH_LABEL" in
+  arm64)  PLATFORM_KEYS="darwin-aarch64" ;;
+  x86_64) PLATFORM_KEYS="darwin-x86_64" ;;
   universal) PLATFORM_KEYS="darwin-aarch64 darwin-x86_64" ;;
-  arm64)     PLATFORM_KEYS="darwin-aarch64" ;;
-  x86_64)    PLATFORM_KEYS="darwin-x86_64" ;;
   *) echo "未知架构标签：$ARCH_LABEL" >&2; exit 1 ;;
 esac
 
-{
-  printf '{\n'
-  printf '  "version": "%s",\n' "$VERSION"
-  printf '  "notes": "%s",\n' "${OMUSE_UPDATE_NOTES:-O Muse ${VERSION} 更新}"
-  printf '  "pub_date": "%s",\n' "$PUB_DATE"
-  printf '  "platforms": {\n'
-  first=1
-  for k in $PLATFORM_KEYS; do
-    if [ "$first" -eq 1 ]; then
-      comma=""
-    else
-      comma=","
-    fi
-    first=0
-    printf '%s    "%s": { "url": "%s", "sha256": "%s" }\n' "$comma" "$k" "$TARGZ_URL" "$TARGZ_SHA"
-  done
-  printf '  }\n'
-  printf '}\n'
-} > "$LATEST_JSON"
-echo "[pack] 已生成 latest.json（${ARCH_LABEL}）"
+python3 - "$LATEST_JSON" "$VERSION" "$PUB_DATE" "$RELEASE_BASE" "$TARGZ_NAME" "$TARGZ_SHA" "$PLATFORM_KEYS" <<'PY'
+import json, os, sys
+from urllib.parse import quote
+
+path, version, pub_date, base, tgz_name, tgz_sha, keys = sys.argv[1:8]
+keys = keys.split()
+
+existing = {}
+if os.path.exists(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            existing = json.load(f).get("platforms") or {}
+    except Exception:
+        existing = {}
+
+url = f"{base}/{version}/{quote(tgz_name)}"
+for k in keys:
+    existing[k] = {"url": url, "sha256": tgz_sha}
+
+doc = {
+    "version": version,
+    "notes": os.environ.get("OMUSE_UPDATE_NOTES", f"O Muse {version} 更新"),
+    "pub_date": pub_date,
+    "platforms": existing,
+}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(doc, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+print(f"[pack] 已生成 latest.json（本次平台：{keys}，累计：{sorted(existing)}）")
+PY
 
 # ---- 7. checksums.txt + VERSION.txt ------------------------------------
 # install.sh 靠 VERSION.txt 把 latest 标签解析成真实版本号。

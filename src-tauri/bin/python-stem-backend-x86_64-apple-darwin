@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# O Muse — 分轨后端 sidecar 启动器。
+#
+# 通过 tauri-plugin-shell 的 sidecar 机制被 Rust 端拉起。
+# 本脚本调用 Python 运行 python-backend/main.py，并优先使用项目内的
+# 虚拟环境（若存在），否则回退系统 python3。
+#
+# 失败时输出**可操作**的提示（缺 Python / 缺依赖 / 缺源码），
+# 这些信息会经 Rust 端捕获后展示给用户，而不是只留一个超时。
+#
+# 独立实现，不依赖任何第三方项目的私有接口。
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 源码位置：开发态在仓库根，打包态随 Resources 分发。
+PY_DIR="${SCRIPT_DIR}/../../python-backend"
+if [ ! -d "$PY_DIR" ]; then
+  PY_DIR="${SCRIPT_DIR}/../Resources/python-backend"
+fi
+if [ ! -d "$PY_DIR" ]; then
+  echo "找不到分轨后端源码 python-backend（已查找：$SCRIPT_DIR/../../ 与 $SCRIPT_DIR/../Resources/）" >&2
+  exit 1
+fi
+
+# 解释器选择顺序：
+#   1) 应用自举的托管运行时（Rust 端经 OMUSE_RUNTIME_DIR 传入）—— 正常路径
+#   2) 项目内 venv —— 开发态
+#   3) 系统 python3 —— 兜底（注意：macOS 自带仅 3.9，装不了当前 PyTorch）
+PY_BIN=""
+if [ -n "${OMUSE_RUNTIME_DIR:-}" ] && [ -x "$OMUSE_RUNTIME_DIR/venv/bin/python3" ]; then
+  PY_BIN="$OMUSE_RUNTIME_DIR/venv/bin/python3"
+  # 模型缓存固定指向运行时目录，避免污染 ~/.cache/torch
+  export TORCH_HOME="${TORCH_HOME:-$OMUSE_RUNTIME_DIR/torch-home}"
+fi
+if [ -z "$PY_BIN" ]; then
+  for cand in "$PY_DIR/.venv/bin/python3" "$PY_DIR/../../.venv/bin/python3"; do
+    if [ -x "$cand" ]; then PY_BIN="$cand"; break; fi
+  done
+fi
+if [ -z "$PY_BIN" ]; then
+  PY_BIN="$(command -v python3 || true)"
+fi
+if [ -z "$PY_BIN" ]; then
+  echo "未找到可用的 Python 解释器。请在应用内安装分轨运行时（设置 → 分轨运行时）。" >&2
+  exit 1
+fi
+
+# 依赖自检：给出明确的指引，而不是让 uvicorn 抛一堆 traceback。
+if ! "$PY_BIN" -c "import fastapi, uvicorn, numpy, demucs" >/dev/null 2>&1; then
+  echo "分轨运行时依赖不完整。请在应用内重新安装分轨运行时（设置 → 分轨运行时 → 重新安装）。" >&2
+  echo "开发态可手动执行：" >&2
+  echo "  \"$PY_BIN\" -m pip install --only-binary=:all: -r \"$PY_DIR/requirements-runtime.txt\"" >&2
+  exit 1
+fi
+
+cd "$PY_DIR"
+exec "$PY_BIN" main.py

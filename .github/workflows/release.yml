@@ -66,11 +66,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/site"
-          bash scripts/release/build.sh \
-            --arch universal \
-            --out-dir "$RUNNER_TEMP/site/releases/${{ steps.ver.outputs.version }}"
+          OUT="$RUNNER_TEMP/site/releases/${{ steps.ver.outputs.version }}"
+          # 分别构建两个架构，而非 lipo 合并成 universal：
+          # 两条单架构路径都已本地实测，universal 合并路径在开发环境无法验证
+          # （需要 x86_64 target 与可写 rustup 目录）。build.sh 的 latest.json
+          # 支持多架构合并，两次运行会累计进同一份清单。
+          bash scripts/release/build.sh --arch arm64  --out-dir "$OUT"
+          bash scripts/release/build.sh --arch x86_64 --out-dir "$OUT"
           echo "=== artifacts ==="
-          ls -l "$RUNNER_TEMP/site/releases/${{ steps.ver.outputs.version }}"
+          ls -l "$OUT"
 
       # 发布前必须复核交付物本身的签名（从 zip 解出再验）
       - name: Verify ad-hoc signature of shipped zip
@@ -79,7 +83,7 @@ jobs:
           cd "$RUNNER_TEMP"
           rm -rf verify && mkdir verify
           V="${{ steps.ver.outputs.version }}"
-          ditto -x -k "site/releases/$V/O Muse-$V-universal.zip" verify/
+          ditto -x -k "site/releases/$V/O Muse-$V-arm64.zip" verify/
           codesign --verify --deep --strict --verbose=2 "verify/O Muse.app"
           echo "signature verification passed"
 
