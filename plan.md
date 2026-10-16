@@ -46,7 +46,7 @@ music-rig/
 │   │   ├── lib.rs               # Tauri 入口，插件注册
 │   │   ├── commands/            # Tauri Command 暴露层
 │   │   │   ├── mod.rs
-│   │   │   ├── stemdeck.rs      # 分轨相关命令（调用 Python sidecar）
+│   │   │   ├── stem_separation.rs  # 分轨相关命令（调用 Python sidecar）
 │   │   │   ├── library.rs       # Kontakt 库管理命令
 │   │   │   └── plugins.rs       # 插件扫描命令
 │   │   ├── core/                # 纯 Rust 业务逻辑（无 Tauri 依赖）
@@ -305,7 +305,7 @@ thiserror = "2"
    - `GET /status/{task_id}`：返回分轨进度（SSE 流）
    - `GET /stems/{task_id}`：返回分轨结果文件路径列表
 2. 使用 `uv` 管理依赖，生成 `requirements.txt`（包含 `fastapi`、`uvicorn`、`demucs`、`librosa`、`pyloudnorm`）。
-3. 在 `src-tauri/src/commands/stemdeck.rs` 中实现 Tauri Command：
+3. 在 `src-tauri/src/commands/stem_separation.rs` 中实现 Tauri Command：
    - `start_separation(file_path: String) -> Result<String, String>`
    - 使用 `tauri_plugin_shell` 的 sidecar API 启动 Python 进程
 4. 在 `tauri.conf.json` 的 `bundle.externalBin` 中配置 Python sidecar 二进制路径。

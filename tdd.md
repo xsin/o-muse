@@ -28,7 +28,7 @@ music-rig/
 │   │   ├── lib.rs                 # Tauri 入口 + 插件注册
 │   │   ├── commands/              # Tauri Command 暴露层
 │   │   │   ├── mod.rs
-│   │   │   ├── stemdeck.rs        # 分轨命令（调 Python sidecar）
+│   │   │   ├── stem_separation.rs  # 分轨命令（调 Python sidecar）
 │   │   │   ├── library.rs         # Kontakt 库管理命令
 │   │   │   └── plugins.rs         # 插件扫描命令（v1.1）
 │   │   ├── core/                  # 纯 Rust 业务逻辑（无 Tauri 依赖）
@@ -59,10 +59,10 @@ music-rig/
 `src/appRegistry.ts`：
 ```ts
 export interface AppDef {
-  id: 'stemdeck' | 'libraries' | 'plugins';
+  id: 'stem_separation' | 'libraries' | 'plugins';
   name: string;          // "StemDeck" / "Kontakt Library Manager" / "Audio Plugin Manager"
   brandPath: string;     // "O Muse / Separate" 等
-  route: string;         // "/apps/stemdeck" ...
+  route: string;         // "/apps/stem_separation" ...
   icon: string;          // svg path / asset
   enabled: boolean;      // plugins=false in v1
   minVersion: string;    // "1.0" / "1.1"
@@ -100,6 +100,75 @@ pub async fn current_tier() -> LicenseTier {
 // Pro 专属 Command 入口统一拦截
 ```
 
+### 3.5 stem_engine::runtime（v1.2，分轨运行时按需自举）
+
+分轨依赖 PyTorch。体积对比：应用本体 ~21MB，而运行时合计
+**~259MB 下载 / ~900MB 落盘**（自包含 CPython 24MB + 依赖 ~151MB + htdemucs 权重 ~84MB）。
+故**不随包分发**，首次使用时自举到用户目录。
+
+```rust
+// core/stem_engine/runtime.rs
+pub enum RuntimeStage { Missing, Checking, DownloadingPython, Verifying, Extracting,
+                        CreatingVenv, InstallingDeps, DownloadingModel, Ready, Failed }
+pub struct RuntimeStatus { stage, progress, message, python_path, size_bytes, estimated_download_bytes }
+pub fn detect(app) -> RuntimeStatus            // 不发网络请求
+pub fn install(app, emit) -> Result<RuntimeStatus>   // 阻塞式，调用方放 spawn_blocking
+pub fn remove(app) -> Result<()>
+pub const PROGRESS_EVENT: &str = "omuse://runtime-progress";   // 进度经事件推送
+```
+
+**目录布局**（`<app data>` 即 `~/Library/Application Support/work.xsin.omuse/`）：
+
+```text
+runtime/
+  .ready                       # 就绪标记：全部步骤成功后才写入
+  python/bin/python3           # 自包含 CPython 3.12.15
+  venv/bin/python3             # 隔离环境（分轨实际使用）
+  torch-home/hub/checkpoints/955717e8-8726e21a.th   # htdemucs 权重
+```
+
+**7 步流程**：下载 CPython → SHA256 校验 → 解压（纯 Rust tar/flate2）→ 建 venv →
+`pip install --only-binary=:all: -r requirements-runtime.txt` →
+下载 htdemucs 权重并校验 → 自检（导入 + 加载模型并断言 4 条分轨）。
+
+**关键设计点**：
+
+- **就绪判定用 `.ready` 标记**，而非"目录存在"。未就绪时重新安装会先清理半成品，
+  避免下载中断被误判为已完成。
+- **numpy 必须显式声明**：demucs 4.1.0 仅在 `darwin + x86_64` 时才声明 numpy，
+  arm64 上不安装，而 `demucs/transformer.py` 直接 `import numpy as np`，
+  会导致 Apple Silicon 分轨必然失败。`requirements-runtime.txt` 显式加
+  `numpy>=1.26,<2`（`<2` 同时满足 demucs 在 x86_64 上的约束，两架构通用）。
+- **模型权重由 Rust 端主动下载并校验**，而非交给 demucs 首次分轨时用 Python
+  urllib 拉取：可控制、可校验、可显示进度，且**装完即可完全离线**分轨。
+- **`TORCH_HOME` 注入**：启动 sidecar 时指向 `<runtime>/torch-home`，
+  避免 torch 写入 `~/.cache/torch`（否则卸载无法完整回收，且污染用户主目录）。
+- **安全**：CPython 与权重均按**固定 SHA256** 校验；依赖强制 `--only-binary=:all:`
+  只走 wheel（避免执行源码包的构建脚本）；解压用 Rust 库；外部进程统一经
+  `tauri-plugin-shell`（不使用 `std::process::Command`）。
+- **磁盘余量前置检查**：不足 900MB 直接报错并给出实际可用值。
+- **下载原子性**：先写 `.part` 再改名，校验失败即清理，不留半个文件。
+- **`OMUSE_RUNTIME_DIR` 环境变量**可覆盖运行时根目录（供测试与高级用户自定义）。
+
+**解释器选择顺序**（`src-tauri/bin/python-stem-backend-<triple>` 启动器）：
+托管运行时（`OMUSE_RUNTIME_DIR` 注入）→ 项目内 venv（开发态）→ 系统 `python3`。
+注意 macOS 自带仅 Python 3.9.6（且为 Xcode CLT 转发桩），而当前 PyTorch 需 3.10+，
+故系统 Python **不满足**依赖，仅为兜底。
+
+**sidecar 失败直报**：捕获子进程 stderr 尾部；进程秒退时立即失败并回传真实原因
+（缺运行时/缺依赖/缺源码），不再干等 30s 健康检查超时。
+
+**依赖双文件**：
+- `python-backend/requirements.txt` —— 开发态松散约束（含可选/预留依赖）
+- `python-backend/requirements-runtime.txt` —— 运行时精简锁定集
+
+精简理由：`librosa` / `pyloudnorm` / `soundfile` 当前代码未使用（原为响度对齐预留），
+其中 librosa 会引入 numba/llvmlite 等大体积包，故运行时不再安装。
+
+**测试覆盖**（`cargo test --lib runtime`，9 例）：URL 与 SHA 自洽性、路径布局、
+`.ready` 语义、解压往返，以及**hermetic 下载校验**（本地一次性 HTTP 服务器：
+正常下载 + 哈希不匹配时拒绝并清理临时文件）。
+
 ## 4. 首页/壳层实现（PRD §6）
 - 左栏常驻（232px）；`market` 默认项 + 动态 `openApps` 标签（多开，✕ 关闭）。
 - `zustand` store：`openApps: AppId[]`、`activeView: 'market' | AppId`。
@@ -107,7 +176,7 @@ pub async fn current_tier() -> LicenseTier {
 
 ## 4.1 国际化实现（ADR-0004 / PRD FR-8）
 - `src/i18n/index.ts`：`i18next.init`，`react-i18next` 注入，`browser-languagedetector` 检测顺序 `['localStorage','navigator']`（持久化键 `ui_lang`）。
-- 文案资源：`src/i18n/locales/{en,zh}.json`，命名空间 `translation`；壳层、卡片、App 名均走 `t('apps.stemdeck.name')` 等。
+- 文案资源：`src/i18n/locales/{en,zh}.json`，命名空间 `translation`；壳层、卡片、App 名均走 `t('apps.stem_separation.name')` 等。
 - App Registry 的 `appRegistry.ts` 仅存 `id / route / icon / enabled / minVersion`，**不存中文/英文字符串**，字符串全部从 i18n 取。
 - 默认语言逻辑：store 有 `ui_lang` → 用之；否则系统 `zh-CN`→`zh`，其余→`en`（回退 `en-US`）。
 - 左栏「设置」提供语言切换；切换写入 store 并 `i18n.changeLanguage()`，即时生效。
