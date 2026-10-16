@@ -221,16 +221,35 @@ https://xsin.github.io/o-muse/releases/<version>/O Muse-<version>-<arch>.zip
 
 安装脚本默认基址即该 URL，无需任何配置即可 `curl | bash`。
 
-基址可用 `OMUSE_BASE_URL` 覆盖，便于迁到自建 CDN 或 GitHub Releases
-（脚本对 `<version>/` 与 `<version>/download/` 两种布局都会依次尝试，
-故迁移时安装脚本**无需改动**）：
+基址可用 `OMUSE_BASE_URL` 覆盖，便于迁到自建 CDN 或 GitHub Releases。
+脚本会先把基址**归一化为 releases 根**——下列三种写法等价，
+都归一到 `https://host/releases`，不会拼出 `.../latest/latest/...`：
 
-```bash
-OMUSE_BASE_URL="https://example.com/releases" bash install.sh
+```
+https://host/releases
+https://host/releases/latest
+https://host/releases/latest/download
 ```
 
-> 仓库需在 Settings → Pages 中将 Source 设为 `Deploy from a branch` →
-> 分支 `gh-pages`、目录 `/ (root)`。
+因此迁移时安装脚本**无需改动**：脚本对 `<version>/` 与
+`<version>/download/` 两种产物布局都会依次尝试，命中即用。
+
+> **仓库需启用 Pages**：Settings → Pages → Source = `Deploy from a branch`
+> → 分支 `gh-pages`、目录 `/ (root)`。未启用时 `curl` 会 404，
+> 脚本会明确报错而不会静默失败。
+
+### 6.5 静态托管的两个实战坑（已在脚本中处理）
+
+静态托管（GitHub Pages / CDN）的 404 行为与普通服务器不同，
+安装脚本必须**不依赖状态码**判定"文件是否存在"：
+
+1. **Pages 对缺失文件返回 `HTTP 404` 但 body 是 HTML**；经代理链路时
+   还可能出现 `HTTP/1.1 200` 的中间响应，令 `curl` 以退出码 56
+   （连接重置）结束，而非 `-f` 期望的 22。
+   → 脚本改为**落盘后校验 zip 魔术字节**（`PK\x03\x04`），以内容为准。
+2. **`set -e` + `pipefail` 下命令替换失败会终止整个脚本**。
+   所有"允许失败"的网络取数（如 `VERSION.txt` 探测）显式 `|| true` 兜底，
+   避免一次网络抖动就让安装中断。
 
 ---
 
@@ -308,7 +327,7 @@ scripts/release/build.sh --arch arm64
 shellcheck releases/latest/install.sh
 
 # 3) 干跑安装到临时目录（不启动、不写系统目录）
-bash releases/latest/install.sh --install-dir /tmp/mr-install --no-launch
+bash releases/latest/install.sh --install-dir /tmp/omuse-install --no-launch
 
 # 4) 校验失败路径：故意损坏 zip，脚本应报错退出
 ```
@@ -323,7 +342,7 @@ bash releases/latest/install.sh --install-dir /tmp/mr-install --no-launch
 2. **universal 包需两个 target**：`aarch64-apple-darwin` 已安装；
    `x86_64-apple-darwin` 需 `rustup target add x86_64-apple-darwin`。
    未安装时构建脚本自动退化为单架构包并如实命名。
-3. **GitHub Pages 域名**：文档中 域名 `xsin.github.io/o-muse`，接入实际托管后替换
-   （脚本支持 `OMUSE_BASE_URL` 覆盖，无需改逻辑）。
+3. **Pages 需手动开启**：仓库 Settings → Pages 必须指向 `gh-pages` 分支；
+   未开启时 `curl` 会 404，脚本会明确报错（不会静默失败）。
 4. **Rosetta**：x86_64 包在 Apple Silicon 上依赖 Rosetta 2；universal 包无此问题，
    故仍以 universal 为优先。
