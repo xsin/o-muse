@@ -405,7 +405,7 @@ mod tests {
     // ── 提权计划的内容组装（不触碰 /Library）──────────────────
 
     #[test]
-    fn 有_nicnt_时优先复用原始_ProductHints() {
+    fn 有_nicnt_时优先复用原始_xml_片段() {
         let root = fixture_root("priv_nicnt");
         let spec = NicntFormSpec {
             name: "PrivLib".to_string(),

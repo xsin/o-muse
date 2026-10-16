@@ -36,9 +36,13 @@ with open(sys.argv[1], encoding="utf-8") as f:
 PY
 }
 
-case "${1:-version}" in
-  version)        read_version ;;
-  product-name)   read_product_name ;;
-  identifier)     read_identifier ;;
-  *) echo "用法：version.sh {version|product-name|identifier}" >&2; exit 1 ;;
-esac
+# 仅在被**直接执行**时提供 CLI；被 source 时不得消费调用方的 $1/$@，
+# 否则 `build.sh --skip-build` 之类会把参数误当成子命令而报错。
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+  case "${1:-version}" in
+    version)        read_version ;;
+    product-name)   read_product_name ;;
+    identifier)     read_identifier ;;
+    *) echo "用法：version.sh {version|product-name|identifier}" >&2; exit 1 ;;
+  esac
+fi

@@ -1,1 +1,375 @@
-{"app":{"title":"O Muse"},"nav":{"market":"Toolbox","settings":"Settings"},"apps":{"stem_separation":{"name":"Stem Separation","brandPath":"O Muse / Separate","desc":"Split a track into vocals, drums, bass and other stems."},"libraries":{"name":"Kontakt Library Manager","brandPath":"O Muse / Libraries","desc":"Read-only inventory of your Kontakt / Native Instruments libraries."},"plugins":{"name":"Audio Plugin Manager","brandPath":"O Muse / Plugins","desc":"Scan and organize your AU / VST / VST3 / CLAP plugins.","soon":"Coming soon"}},"market":{"heading":"Toolbox","subtitle":"Pick a tool to open it in a new tab.","open":"Open"},"settings":{"heading":"Settings","language":"Language","theme":"Theme","tier":"License","tierFree":"Free","tierPro":"Pro","activated":"Pro activated","invalidKey":"Invalid key — still on Free","activateFailed":"Activation failed: {{err}}"},"theme":{"light":"Light","dark":"Dark","system":"System"},"language":{"en":"English","zh":"中文"},"library":{"scanning":"Scanning…","scan":"Scan libraries","empty":"No libraries found.","registered":"Registered","unregistered":"Not registered","diagnostics":"Diagnostics","cols":{"name":"Name","snpid":"SNPID","path":"Path","status":"Status"},"diag":{"MissingPath":"Missing path","DuplicateSnpid":"Duplicate SNPID","DisconnectedVolume":"Volume disconnected","MissingMetadata":"Missing metadata"}},"common":{"close":"Close","cancel":"Cancel","confirm":"Confirm","refresh":"Refresh","search":"Search","actions":"Actions"},"plugins":{"scanning":"Scanning plugins…","scan":"Scan Plugins","rescan":"Rescan","empty":"No plugins found.","search":"Search name or vendor…","sources":"Scan Sources","addDir":"Add Custom Folder","addDirPro":"Add Custom Folder (Pro)","custom":"Custom","standard":"Standard","enabled":"Enabled","remove":"Remove","pickDir":"Choose Plugin Folder","proRequired":"This feature requires a O Muse Pro subscription","added":"Folder added","cols":{"name":"Name","vendor":"Vendor","version":"Version","format":"Format","path":"Path","size":"Size","installedAt":"Installed","actions":"Actions"},"count":"{{n}} plugins","cached":"Cached","failed":"Scan failed: {{err}}","cachedCount":"Cached {{hits}} / {{total}}","totalCount":"{{n}} total","unknownVendor":"Untagged","cacheWarning":"Metadata cache degraded","formats":{"all":"All formats"},"space":{"title":"Disk usage","summary":"Scanned {{n}} plugins, {{size}} total"},"byFormat":"By format","byVendor":"By vendor (click to filter)","filter":{"clear":"Clear filters","vendorHint":"{{name}} · {{n}} plugins · {{size}}"},"tag":{"symlink":"Symlink","broken":"Broken link","missingTarget":"(target missing)","symlinkCount":"{{n}} symlinked","brokenCount":"{{n}} broken links"},"actions":{"move":"Move…","trash":"Delete","undo":"Restore"},"move":{"title":"Move “{{name}}”","symlinkNote":"The real files are moved to the folder you pick, and a symbolic link stays in the original place. macOS aliases are Finder bookmarks that DAW scanners do not resolve; a symlink is resolved transparently by the kernel, so your DAW and the system scanner keep finding the plugin.","pickTarget":"Choose target folder","noTarget":"No target folder selected","planning":"Calculating…","size":"To move: {{size}}","free":"Free space at target: {{size}}","insufficient":"Not enough free space on the target volume.","confirm":"Move","working":"Moving…","cancel":"Cancel","done":"Moved; symlink left in place: {{path}}"},"delete":{"title":"Delete “{{name}}”","warning":"Moved to Trash — recoverable","body":"The plugin is moved to the Trash (you can put it back from there). It is never permanently deleted here.","linkNote":"This entry is a symlink: deleting removes only the link. The real files stay at {{path}} — use “Restore” first if you want to deal with those too.","typeHint":"Type {{name}} to confirm","mismatch":"Name does not match.","trash":"Move to Trash","permanent":"Delete permanently","permanentDone":"Permanently deleted.","working":"Deleting…","done":"Moved to Trash: {{path}}","cancel":"Cancel"},"undo":{"title":"Restore “{{name}}”","body":"The real files at {{path}} are moved back to the original location and the symlink is removed.","confirm":"Restore","working":"Restoring…","cancel":"Cancel","done":"Restored to the original location."}},"stem":{"pickFile":"Choose Audio File","noFile":"No file selected","start":"Separate","separating":"Separating…","output":"Output Folder","files":"Stem Files","demoMode":"Demo mode (Demucs unavailable — mock results)","status":{"queued":"Queued","processing":"Processing","done":"Done","error":"Failed","demo_done":"Done (demo)"},"error":"Separation failed: {{err}}","openFolder":"Reveal in Finder","ready":"Ready","idle":"Pick an audio file to begin.","hint":"Common audio formats supported; the local separation service starts on first run.","stop":"Stop","emptyFiles":"No stem files yet.","needRuntime":"The separation runtime is not installed. Install it in Settings → Separation Runtime.","goSettings":"Open settings","analyze":"Analyze","analyzing":"Analyzing…","analysisTitle":"Track Analysis","separationTitle":"Stem Separation","noAnalysis":"Pick a file, then press Analyze — key and tempo come back in seconds.","analysisHint":"Key and tempo are estimated from the middle 60 seconds of the track.","key":"Key","bpm":"Tempo","duration":"Duration","keyConfidence":"Key confidence","tempoConfidence":"Tempo confidence","camelot":"Camelot {{code}}","halfTime":"half-time {{bpm}}","doubleTime":"double-time {{bpm}}","device":"Device","deviceMps":"MPS accelerated","deviceCpu":"CPU (no MPS)","deviceFallback":"Fell back to CPU: {{note}}","tabFiles":"Stem files","tabInfo":"Run info","jobId":"Job ID","stemsReady":"{{n}} stems","separationDone":"Separation finished.","unknownError":"Unknown error","mode":{"major":"Major","minor":"Minor"},"stemNames":{"vocals":"Vocals","drums":"Drums","bass":"Bass","other":"Other"},"cols":{"name":"Stem","size":"Size","path":"Path","actions":"Actions"},"stage":{"queued":"Queued","loading_model":"Loading model","reading_audio":"Reading audio","separating":"Separating","writing_stems":"Writing stem files","separating_done":"Finalising","fallback_cpu":"MPS unavailable — retrying on CPU","analyzing":"Analyzing","analyzing_key":"Detecting key","analyzing_tempo":"Detecting tempo","done":"Done","failed":"Failed"},"notStarted":"Not started yet.","sourceTitle":"Audio file"},"runtime":{"title":"Separation Runtime","desc":"Stem separation needs PyTorch, which is large (~{{size}}). It is not bundled; it downloads on first use.","status":"Status","missing":"Not installed","ready":"Ready","failed":"Failed","installing":"Installing","size":"Disk usage","install":"Download & install","reinstall":"Reinstall","remove":"Uninstall","removed":"Runtime removed","estimate":"About {{size}} to download","needPython":"Requires a network connection.","stages":{"checking":"Checking…","downloading_python":"Downloading Python runtime","verifying":"Verifying","extracting":"Extracting","creating_venv":"Creating isolated environment","installing_deps":"Installing dependencies","downloading_model":"Downloading model","ready":"Ready","missing":"Not installed","failed":"Failed"},"confirmRemove":"Uninstall the separation runtime? This frees ~900MB; you'll need to re-download to use separation again."},"kontakt":{"title":"Kontakt Library Manager","scan":"Scan installed libraries","scanning":"Scanning…","addLib":"Add library…","scanDir":"Scan a folder…","empty":"No Kontakt libraries found.","cols":{"name":"Name","snpid":"SNPID","size":"Size","path":"Content path","status":"Status","actions":"Actions"},"registered":"Registered","diskOnly":"On disk only","issues":"Issues","remove":"Remove registration","removeConfirm":"This only removes the Kontakt registration; files on disk are kept. Continue?","removed":"Registration removed.","openInFinder":"Reveal in Finder","licMissing":"Missing .nicnt","createNicnt":"Create .nicnt…","nicntHint":"Kontakt identifies a library by the .nicnt file in its root folder. Without it the library will not appear.","nicntForm":{"name":"Library name","regKey":"RegKey","snpid":"SNPID","company":"Company","type":"Type","upid":"UPID (optional)","visibility":"Visibility"},"nicntCreated":"Created .nicnt: {{path}}","nicntExists":"A .nicnt already exists in that folder; nothing was overwritten.","needAdmin":"This source lives in /Library and needs administrator authorization. The exact files and reasons are listed before you confirm.","dupSnpid":"Duplicate SNPID","dupPath":"Duplicate content path","missingPath":"Content path missing","hidden":"Hidden in Kontakt","selectDir":"Choose library root folder","added":"Added: {{name}}","total":"{{n}} libraries, {{size}} total","priv":{"title":"Administrator permission needed","intro":"Completing the system-level registration for “{{name}}” writes the files below. macOS will ask for your administrator password.","notice":"After you continue, macOS asks for your administrator password. This operation only writes the files listed above; it never modifies or deletes the sample content on disk.","actionWrite":"Write","actionRemove":"Remove","continue":"Continue","decline":"Skip","applied":"System-level registration updated ({{n}} file(s)).","cancelled":"Authorization cancelled — no system file was changed.","reasonXml":"Kontakt's classic browser reads this file to recognise the library; without it the library does not appear in the Libraries list.","reasonPlist":"Records the content path and visibility of this library.","reasonXmlRemove":"Removing this file makes the library disappear from Kontakt's classic browser.","reasonPlistRemove":"Removes the system-level content path and visibility record of this library."}}}
+{
+  "app": {
+    "title": "O Muse"
+  },
+  "nav": {
+    "market": "Toolbox",
+    "settings": "Settings"
+  },
+  "apps": {
+    "stem_separation": {
+      "name": "Stem Separation",
+      "brandPath": "O Muse / Separate",
+      "desc": "Split a track into vocals, drums, bass and other stems."
+    },
+    "libraries": {
+      "name": "Kontakt Library Manager",
+      "brandPath": "O Muse / Libraries",
+      "desc": "Read-only inventory of your Kontakt / Native Instruments libraries."
+    },
+    "plugins": {
+      "name": "Audio Plugin Manager",
+      "brandPath": "O Muse / Plugins",
+      "desc": "Scan and organize your AU / VST / VST3 / CLAP plugins.",
+      "soon": "Coming soon"
+    }
+  },
+  "market": {
+    "heading": "Toolbox",
+    "subtitle": "Pick a tool to open it in a new tab.",
+    "open": "Open"
+  },
+  "settings": {
+    "heading": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "tier": "License",
+    "tierFree": "Free",
+    "tierPro": "Pro",
+    "activated": "Pro activated",
+    "invalidKey": "Invalid key — still on Free",
+    "activateFailed": "Activation failed: {{err}}"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文"
+  },
+  "library": {
+    "scanning": "Scanning…",
+    "scan": "Scan libraries",
+    "empty": "No libraries found.",
+    "registered": "Registered",
+    "unregistered": "Not registered",
+    "diagnostics": "Diagnostics",
+    "cols": {
+      "name": "Name",
+      "snpid": "SNPID",
+      "path": "Path",
+      "status": "Status"
+    },
+    "diag": {
+      "MissingPath": "Missing path",
+      "DuplicateSnpid": "Duplicate SNPID",
+      "DisconnectedVolume": "Volume disconnected",
+      "MissingMetadata": "Missing metadata"
+    }
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "refresh": "Refresh",
+    "search": "Search",
+    "actions": "Actions"
+  },
+  "plugins": {
+    "scanning": "Scanning plugins…",
+    "scan": "Scan Plugins",
+    "rescan": "Rescan",
+    "empty": "No plugins found.",
+    "search": "Search name or vendor…",
+    "sources": "Scan Sources",
+    "addDir": "Add Custom Folder",
+    "addDirPro": "Add Custom Folder (Pro)",
+    "custom": "Custom",
+    "standard": "Standard",
+    "enabled": "Enabled",
+    "remove": "Remove",
+    "pickDir": "Choose Plugin Folder",
+    "proRequired": "This feature requires a O Muse Pro subscription",
+    "added": "Folder added",
+    "cols": {
+      "name": "Name",
+      "vendor": "Vendor",
+      "version": "Version",
+      "format": "Format",
+      "path": "Path",
+      "size": "Size",
+      "installedAt": "Installed",
+      "actions": "Actions"
+    },
+    "count": "{{n}} plugins",
+    "cached": "Cached",
+    "failed": "Scan failed: {{err}}",
+    "cachedCount": "Cached {{hits}} / {{total}}",
+    "totalCount": "{{n}} total",
+    "unknownVendor": "Untagged",
+    "cacheWarning": "Metadata cache degraded",
+    "formats": {
+      "all": "All formats"
+    },
+    "space": {
+      "title": "Disk usage",
+      "summary": "Scanned {{n}} plugins, {{size}} total"
+    },
+    "byFormat": "By format",
+    "byVendor": "By vendor (click to filter)",
+    "filter": {
+      "clear": "Clear filters",
+      "vendorHint": "{{name}} · {{n}} plugins · {{size}}"
+    },
+    "tag": {
+      "symlink": "Symlink",
+      "broken": "Broken link",
+      "missingTarget": "(target missing)",
+      "symlinkCount": "{{n}} symlinked",
+      "brokenCount": "{{n}} broken links"
+    },
+    "actions": {
+      "move": "Move…",
+      "trash": "Delete",
+      "undo": "Restore"
+    },
+    "move": {
+      "title": "Move “{{name}}”",
+      "symlinkNote": "The real files are moved to the folder you pick, and a symbolic link stays in the original place. macOS aliases are Finder bookmarks that DAW scanners do not resolve; a symlink is resolved transparently by the kernel, so your DAW and the system scanner keep finding the plugin.",
+      "pickTarget": "Choose target folder",
+      "noTarget": "No target folder selected",
+      "planning": "Calculating…",
+      "size": "To move: {{size}}",
+      "free": "Free space at target: {{size}}",
+      "insufficient": "Not enough free space on the target volume.",
+      "confirm": "Move",
+      "working": "Moving…",
+      "cancel": "Cancel",
+      "done": "Moved; symlink left in place: {{path}}"
+    },
+    "delete": {
+      "title": "Delete “{{name}}”",
+      "warning": "Moved to Trash — recoverable",
+      "body": "The plugin is moved to the Trash (you can put it back from there). It is never permanently deleted here.",
+      "linkNote": "This entry is a symlink: deleting removes only the link. The real files stay at {{path}} — use “Restore” first if you want to deal with those too.",
+      "typeHint": "Type {{name}} to confirm",
+      "mismatch": "Name does not match.",
+      "trash": "Move to Trash",
+      "permanent": "Delete permanently",
+      "permanentDone": "Permanently deleted.",
+      "working": "Deleting…",
+      "done": "Moved to Trash: {{path}}",
+      "cancel": "Cancel"
+    },
+    "undo": {
+      "title": "Restore “{{name}}”",
+      "body": "The real files at {{path}} are moved back to the original location and the symlink is removed.",
+      "confirm": "Restore",
+      "working": "Restoring…",
+      "cancel": "Cancel",
+      "done": "Restored to the original location."
+    }
+  },
+  "stem": {
+    "pickFile": "Choose Audio File",
+    "noFile": "No file selected",
+    "start": "Separate",
+    "separating": "Separating…",
+    "output": "Output Folder",
+    "files": "Stem Files",
+    "demoMode": "Demo mode (Demucs unavailable — mock results)",
+    "status": {
+      "queued": "Queued",
+      "processing": "Processing",
+      "done": "Done",
+      "error": "Failed",
+      "demo_done": "Done (demo)"
+    },
+    "error": "Separation failed: {{err}}",
+    "openFolder": "Reveal in Finder",
+    "ready": "Ready",
+    "idle": "Pick an audio file to begin.",
+    "hint": "Common audio formats supported; the local separation service starts on first run.",
+    "stop": "Stop",
+    "emptyFiles": "No stem files yet.",
+    "needRuntime": "The separation runtime is not installed. Install it in Settings → Separation Runtime.",
+    "goSettings": "Open settings",
+    "analyze": "Analyze",
+    "analyzing": "Analyzing…",
+    "analysisTitle": "Track Analysis",
+    "separationTitle": "Stem Separation",
+    "noAnalysis": "Pick a file, then press Analyze — key and tempo come back in seconds.",
+    "analysisHint": "Key and tempo are estimated from the middle 60 seconds of the track.",
+    "key": "Key",
+    "bpm": "Tempo",
+    "duration": "Duration",
+    "keyConfidence": "Key confidence",
+    "tempoConfidence": "Tempo confidence",
+    "camelot": "Camelot {{code}}",
+    "halfTime": "half-time {{bpm}}",
+    "doubleTime": "double-time {{bpm}}",
+    "device": "Device",
+    "deviceMps": "MPS accelerated",
+    "deviceCpu": "CPU (no MPS)",
+    "deviceFallback": "Fell back to CPU: {{note}}",
+    "tabFiles": "Stem files",
+    "tabInfo": "Run info",
+    "jobId": "Job ID",
+    "stemsReady": "{{n}} stems",
+    "separationDone": "Separation finished.",
+    "unknownError": "Unknown error",
+    "mode": {
+      "major": "Major",
+      "minor": "Minor"
+    },
+    "stemNames": {
+      "vocals": "Vocals",
+      "drums": "Drums",
+      "bass": "Bass",
+      "other": "Other"
+    },
+    "cols": {
+      "name": "Stem",
+      "size": "Size",
+      "path": "Path",
+      "actions": "Actions"
+    },
+    "stage": {
+      "queued": "Queued",
+      "loading_model": "Loading model",
+      "reading_audio": "Reading audio",
+      "separating": "Separating",
+      "writing_stems": "Writing stem files",
+      "separating_done": "Finalising",
+      "fallback_cpu": "MPS unavailable — retrying on CPU",
+      "analyzing": "Analyzing",
+      "analyzing_key": "Detecting key",
+      "analyzing_tempo": "Detecting tempo",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "notStarted": "Not started yet.",
+    "sourceTitle": "Audio file"
+  },
+  "runtime": {
+    "title": "Separation Runtime",
+    "desc": "Stem separation needs PyTorch, which is large (~{{size}}). It is not bundled; it downloads on first use.",
+    "status": "Status",
+    "missing": "Not installed",
+    "ready": "Ready",
+    "failed": "Failed",
+    "installing": "Installing",
+    "size": "Disk usage",
+    "install": "Download & install",
+    "reinstall": "Reinstall",
+    "remove": "Uninstall",
+    "removed": "Runtime removed",
+    "estimate": "About {{size}} to download",
+    "needPython": "Requires a network connection.",
+    "stages": {
+      "checking": "Checking…",
+      "downloading_python": "Downloading Python runtime",
+      "verifying": "Verifying",
+      "extracting": "Extracting",
+      "creating_venv": "Creating isolated environment",
+      "installing_deps": "Installing dependencies",
+      "downloading_model": "Downloading model",
+      "ready": "Ready",
+      "missing": "Not installed",
+      "failed": "Failed"
+    },
+    "confirmRemove": "Uninstall the separation runtime? This frees ~900MB; you'll need to re-download to use separation again."
+  },
+  "kontakt": {
+    "title": "Kontakt Library Manager",
+    "scan": "Scan installed libraries",
+    "scanning": "Scanning…",
+    "addLib": "Add library…",
+    "scanDir": "Scan a folder…",
+    "empty": "No Kontakt libraries found.",
+    "cols": {
+      "name": "Name",
+      "snpid": "SNPID",
+      "size": "Size",
+      "path": "Content path",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "registered": "Registered",
+    "diskOnly": "On disk only",
+    "issues": "Issues",
+    "remove": "Remove registration",
+    "removeConfirm": "This only removes the Kontakt registration; files on disk are kept. Continue?",
+    "removed": "Registration removed.",
+    "openInFinder": "Reveal in Finder",
+    "licMissing": "Missing .nicnt",
+    "createNicnt": "Create .nicnt…",
+    "nicntHint": "Kontakt identifies a library by the .nicnt file in its root folder. Without it the library will not appear.",
+    "nicntForm": {
+      "name": "Library name",
+      "regKey": "RegKey",
+      "snpid": "SNPID",
+      "company": "Company",
+      "type": "Type",
+      "upid": "UPID (optional)",
+      "visibility": "Visibility"
+    },
+    "nicntCreated": "Created .nicnt: {{path}}",
+    "nicntExists": "A .nicnt already exists in that folder; nothing was overwritten.",
+    "needAdmin": "This source lives in /Library and needs administrator authorization. The exact files and reasons are listed before you confirm.",
+    "dupSnpid": "Duplicate SNPID",
+    "dupPath": "Duplicate content path",
+    "missingPath": "Content path missing",
+    "hidden": "Hidden in Kontakt",
+    "selectDir": "Choose library root folder",
+    "added": "Added: {{name}}",
+    "total": "{{n}} libraries, {{size}} total",
+    "priv": {
+      "title": "Administrator permission needed",
+      "intro": "Completing the system-level registration for “{{name}}” writes the files below. macOS will ask for your administrator password.",
+      "notice": "After you continue, macOS asks for your administrator password. This operation only writes the files listed above; it never modifies or deletes the sample content on disk.",
+      "actionWrite": "Write",
+      "actionRemove": "Remove",
+      "continue": "Continue",
+      "decline": "Skip",
+      "applied": "System-level registration updated ({{n}} file(s)).",
+      "cancelled": "Authorization cancelled — no system file was changed.",
+      "reasonXml": "Kontakt's classic browser reads this file to recognise the library; without it the library does not appear in the Libraries list.",
+      "reasonPlist": "Records the content path and visibility of this library.",
+      "reasonXmlRemove": "Removing this file makes the library disappear from Kontakt's classic browser.",
+      "reasonPlistRemove": "Removes the system-level content path and visibility record of this library.",
+      "replanned": "The file list changed; please review it again."
+    }
+  },
+  "update": {
+    "title": "Updates",
+    "current": "Current version",
+    "autoCheck": "Check automatically",
+    "check": "Updates",
+    "checkNow": "Check for updates",
+    "checking": "Checking…",
+    "upToDate": "You're on the latest version.",
+    "available": "Update available",
+    "versionLine": "{{current}} → {{next}}",
+    "size": "Download size {{size}}",
+    "showNotes": "What's new",
+    "hideNotes": "Hide details",
+    "noNotes": "No release notes for this version.",
+    "released": "Released {{date}}",
+    "later": "Later",
+    "update": "Update",
+    "retry": "Retry",
+    "installing": "Installing…",
+    "failed": "Update failed: {{err}}",
+    "checkFailed": "Update check failed: {{err}}",
+    "source": "Update source",
+    "stages": {
+      "downloading": "Downloading the update…",
+      "verifying": "Verifying the package…",
+      "extracting": "Extracting…",
+      "installing": "Installing…"
+    }
+  }
+}

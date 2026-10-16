@@ -226,13 +226,69 @@ if [ "${BUILD_DMG:-1}" = "1" ]; then
   mkdir -p "$DMG_STAGE"
   ditto "$APP_SRC" "$DMG_STAGE/${APP_NAME}.app"
   ln -s /Applications "$DMG_STAGE/Applications" 2>/dev/null || true
-  hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_PATH" >/dev/null
-  ( cd "$OUT_DIR" && shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256" )
-  echo "[pack] dmg SHA256: $(awk '{print $1}' "$DMG_PATH.sha256")"
+  # dmg 是**可选**产物（主分发是 zip）：失败只告警，不得中断
+  # tar.gz / latest.json / checksums 的生成（否则一个可选步骤会毁掉整次发布）。
+  if hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG_PATH" >/dev/null 2>&1; then
+    ( cd "$OUT_DIR" && shasum -a 256 "$DMG_NAME" > "$DMG_NAME.sha256" )
+    echo "[pack] dmg SHA256: $(awk '{print $1}' "$DMG_PATH.sha256")"
+  else
+    echo "[pack] 警告：dmg 生成失败（可选产物，已跳过；zip/tar.gz/清单不受影响）" >&2
+    rm -f "$DMG_PATH"
+  fi
   rm -rf "$DMG_STAGE"
 else
   echo "[pack] 跳过 dmg（BUILD_DMG=0）"
 fi
+
+# ---- 6.5 更新用归档 .app.tar.gz（自动更新使用，与 zip 同源）-----------
+# 客户端无法解压 zip（zip crate 上游被 yank），故额外产出 tar.gz，
+# 自动更新器用 flate2 + tar 解压。内容与 zip 完全同源。
+TARGZ_NAME="${APP_NAME}-${VERSION}-${ARCH_LABEL}.app.tar.gz"
+TARGZ_PATH="$OUT_DIR/$TARGZ_NAME"
+echo "[pack] tar.gz → ${TARGZ_NAME}"
+rm -f "$TARGZ_PATH"
+COPYFILE_DISABLE=1 tar -czf "$TARGZ_PATH" -C "$(dirname "$APP_SRC")" "$(basename "$APP_SRC")"
+( cd "$OUT_DIR" && shasum -a 256 "$TARGZ_NAME" > "$TARGZ_NAME.sha256" )
+TARGZ_SHA="$(awk '{print $1}' "$TARGZ_PATH.sha256")"
+echo "[pack] tar.gz SHA256: ${TARGZ_SHA}"
+
+# ---- 6.6 latest.json（自动更新清单）-----------------------------------
+# version 与 tauri.conf.json 单一来源；sha256 取自刚生成的 .sha256。
+LATEST_JSON="$OUT_DIR/latest.json"
+RELEASE_BASE="${OMUSE_RELEASE_BASE:-https://xsin.github.io/o-muse/releases}"
+PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+TARGZ_URL="${RELEASE_BASE}/${VERSION}/$(printf '%s' "$TARGZ_NAME" | sed 's/ /%20/g')"
+
+# 平台键必须与客户端一致：Rust 端按 std::env::consts::ARCH 映射，
+# aarch64 → darwin-aarch64、x86_64 → darwin-x86_64。
+# 注意产物命名用的是 "arm64"，与平台键的 "aarch64" **不同**，切勿混用。
+case "$ARCH_LABEL" in
+  universal) PLATFORM_KEYS="darwin-aarch64 darwin-x86_64" ;;
+  arm64)     PLATFORM_KEYS="darwin-aarch64" ;;
+  x86_64)    PLATFORM_KEYS="darwin-x86_64" ;;
+  *) echo "未知架构标签：$ARCH_LABEL" >&2; exit 1 ;;
+esac
+
+{
+  printf '{\n'
+  printf '  "version": "%s",\n' "$VERSION"
+  printf '  "notes": "%s",\n' "${OMUSE_UPDATE_NOTES:-O Muse ${VERSION} 更新}"
+  printf '  "pub_date": "%s",\n' "$PUB_DATE"
+  printf '  "platforms": {\n'
+  first=1
+  for k in $PLATFORM_KEYS; do
+    if [ "$first" -eq 1 ]; then
+      comma=""
+    else
+      comma=","
+    fi
+    first=0
+    printf '%s    "%s": { "url": "%s", "sha256": "%s" }\n' "$comma" "$k" "$TARGZ_URL" "$TARGZ_SHA"
+  done
+  printf '  }\n'
+  printf '}\n'
+} > "$LATEST_JSON"
+echo "[pack] 已生成 latest.json（${ARCH_LABEL}）"
 
 # ---- 7. checksums.txt + VERSION.txt ------------------------------------
 # install.sh 靠 VERSION.txt 把 latest 标签解析成真实版本号。

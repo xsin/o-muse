@@ -199,6 +199,30 @@ htdemucs 权重 `955717e8-8726e21a.th` 也按固定 SHA256 校验。
 `bundle.externalBin` 注册 `bin/python-stem-backend` 启动器。
 `requirements-runtime.txt` 优先从资源目录读取，开发态回退仓库根。
 
+### 3.6 updater（v1.3，自动更新）
+
+用 Tauri 官方 `tauri-plugin-updater` + `tauri-plugin-process`：
+更新包经**独立于 Apple 证书的签名密钥对**校验（`tauri signer`），
+清单为静态 `latest.json`，托管在既有 gh-pages 上，复用现有分发通道。
+
+```rust
+// core/updater/mod.rs
+pub struct UpdateInfo { version, current_version, notes, date, download_bytes }
+// commands/updater.rs
+#[tauri::command] pub async fn update_check(app) -> Result<Option<UpdateInfo>, String>;
+#[tauri::command] pub async fn update_install(app) -> Result<(), String>;
+#[tauri::command] pub async fn app_restart(app) -> Result<(), String>;
+pub const PROGRESS_EVENT: &str = "omuse://update-progress";
+```
+
+要点：Rust 侧只做编排（检查/下载/安装/重启），版本比较与验签交由插件；
+启动后延迟 5 秒首查、之后每 6 小时一次；`update_check` 对网络类失败返回
+`Ok(None)` 以保证**静默**；私钥仅存 CI Secrets，公钥进 `tauri.conf.json`；
+更新只替换 `.app`，用户数据在 Application Support 中故不受影响。
+
+> **完整技术设计见 [`docs/tdd-auto-update.md`](docs/tdd-auto-update.md)**
+> （含清单格式、密钥管理与轮换、CI 变更、测试策略与风险）。
+
 ## 4. 首页/壳层实现（PRD §6）
 - 左栏常驻（232px）；`market` 默认项 + 动态 `openApps` 标签（多开，✕ 关闭）。
 - `zustand` store：`openApps: AppId[]`、`activeView: 'market' | AppId`。

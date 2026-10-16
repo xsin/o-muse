@@ -22,16 +22,30 @@ interface UIState {
   activeView: ActiveView;
   theme: ThemeMode;
   lang: string;
+  /** 自动检查更新（默认开；关掉后仅保留设置页的手动检查）。 */
+  autoCheckUpdate: boolean;
+  /**
+   * 已被「稍后」的版本号；`null` 表示未稍后任何版本。
+   *
+   * 持久化它（而非一个布尔）有两个好处：
+   *   1. 同一版本不会在下次启动时又打扰用户 —— 对应「不再提示」；
+   *   2. 出现**更高**版本时能自动重新提示 —— 对应「有新版本可用」。
+   */
+  updateDismissed: string | null;
   openApp: (id: AppId) => void;
   closeApp: (id: AppId) => void;
   setActive: (view: "market" | "settings" | AppId) => void;
   setTheme: (mode: ThemeMode) => void;
   setLang: (lang: string) => void;
+  setAutoCheckUpdate: (on: boolean) => void;
+  setUpdateDismissed: (version: string | null) => void;
 }
 
 const initialTheme =
   (localStorage.getItem("ui_theme") as ThemeMode | null) ?? "system";
 const initialLang = localStorage.getItem("ui_lang") ?? i18n.language ?? "en";
+const initialAutoCheck = localStorage.getItem("ui_auto_check_update") !== "0";
+const initialDismissed = localStorage.getItem("ui_update_dismissed");
 
 applyTheme(initialTheme);
 
@@ -40,6 +54,8 @@ export const useUI = create<UIState>((set) => ({
   activeView: "market",
   theme: initialTheme,
   lang: initialLang,
+  autoCheckUpdate: initialAutoCheck,
+  updateDismissed: initialDismissed,
   openApp: (id) =>
     set((s) => ({
       openApps: s.openApps.includes(id) ? s.openApps : [...s.openApps, id],
@@ -62,6 +78,15 @@ export const useUI = create<UIState>((set) => ({
     localStorage.setItem("ui_lang", lang);
     i18n.changeLanguage(lang);
     set({ lang });
+  },
+  setAutoCheckUpdate: (on) => {
+    localStorage.setItem("ui_auto_check_update", on ? "1" : "0");
+    set({ autoCheckUpdate: on });
+  },
+  setUpdateDismissed: (version) => {
+    if (version) localStorage.setItem("ui_update_dismissed", version);
+    else localStorage.removeItem("ui_update_dismissed");
+    set({ updateDismissed: version });
   },
 }));
 

@@ -1044,7 +1044,7 @@ mod tests {
 
     // 6) XML 内容校验
     #[test]
-    fn xml缺少ProductHints时拒绝() {
+    fn xml_缺少_producthints_时拒绝() {
         let dir = fixture("xml");
         let roots = roots(&dir);
         let target = roots.service_center.join("Bad.xml");
@@ -1192,6 +1192,33 @@ mod tests {
         let meta = fs::symlink_metadata(&target).unwrap();
         assert_eq!(meta.permissions().mode() & 0o7777, 0o644, "系统文件权限应为 0644");
         assert_eq!(fs::read(&target).unwrap(), PLIST_BYTES);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 目标目录不存在时按0755创建() {
+        let dir = fixture("mkdir");
+        let roots = roots(&dir);
+        // 模拟「Service Center 目录尚不存在」：删掉夹具里的目录再写。
+        fs::remove_dir_all(&roots.service_center).unwrap();
+        let target = roots.service_center.join("New.xml");
+
+        let applied =
+            apply_operations(&[write_op(&target, XML_BYTES)], &roots).expect("应能创建目录并写入");
+        assert_eq!(applied.len(), 1);
+
+        let dir_mode = fs::symlink_metadata(&roots.service_center)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777;
+        assert_eq!(dir_mode, 0o755, "新建目录权限应为 0755");
+        let file_mode = fs::symlink_metadata(&target)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777;
+        assert_eq!(file_mode, 0o644, "新建文件权限应为 0644");
         let _ = fs::remove_dir_all(&dir);
     }
 

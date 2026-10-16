@@ -175,6 +175,9 @@ export default function KontaktLibraryPage() {
    *
    * `allow === false` 表示用户跳过：直接收起对话框，不做任何提权动作
    * （免提权部分此前已经写好了）。
+   *
+   * 点「继续」后会**重新取一遍计划**再执行：只有清单与用户看到的完全一致才动手，
+   * 否则把新清单展示出来让用户重新确认——保证「告知的操作对象」＝「真正执行的操作」。
    */
   const decidePrivilege = async (allow: boolean) => {
     const target = privTarget;
@@ -185,6 +188,20 @@ export default function KontaktLibraryPage() {
     setPrivBusy(true);
     setError(null);
     try {
+      const fresh = await invoke<PrivilegePlan>("kontakt_privilege_plan", {
+        regKey: target.regKey,
+        name: target.name,
+      });
+      if (!samePlan(fresh, privPlan)) {
+        if (fresh.needed && fresh.entries.length > 0) {
+          setPrivPlan(fresh);
+          setNotice(t("kontakt.priv.replanned"));
+        } else {
+          closePrivilege();
+        }
+        return;
+      }
+
       const applied = await invoke<string[]>("kontakt_apply_privileged", {
         regKey: target.regKey,
         name: target.name,
@@ -525,6 +542,16 @@ function SortHeader({
       <span className="text-[10px] opacity-60">{active ? (asc ? "▲" : "▼") : "↕"}</span>
     </button>
   );
+}
+
+/** 两份计划是否描述同一组操作（路径 + 动作）。 */
+function samePlan(a: PrivilegePlan | null, b: PrivilegePlan | null): boolean {
+  const fingerprint = (plan: PrivilegePlan | null) =>
+    (plan?.entries ?? [])
+      .map((entry) => `${entry.action}:${entry.path}`)
+      .sort()
+      .join("|");
+  return fingerprint(a) === fingerprint(b);
 }
 
 function isRegistered(l: KontaktLibrary): boolean {

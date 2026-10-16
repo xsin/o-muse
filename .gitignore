@@ -41,3 +41,6 @@ releases/latest/*
 
 # 分轨作业输出（运行时产物，不入库）
 python-backend/stems/
+
+# 更新签名私钥（仅本地/CI Secrets，绝不入库）
+.updater-keys/

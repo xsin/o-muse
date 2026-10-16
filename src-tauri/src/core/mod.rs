@@ -6,3 +6,4 @@ pub mod library_manager;
 pub mod plugin_scanner;
 pub mod license;
 pub mod kontakt;
+pub mod updater;

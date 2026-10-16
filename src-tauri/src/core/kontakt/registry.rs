@@ -516,9 +516,21 @@ pub fn write_system_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     ensure_no_symlink(path)?;
 
     if !parent.exists() {
+        // 只给「本次真正创建」的层级设 0755；既有的系统目录权限绝不改动。
+        let mut missing: Vec<PathBuf> = Vec::new();
+        let mut cursor = parent.to_path_buf();
+        while !cursor.exists() {
+            let Some(up) = cursor.parent().map(Path::to_path_buf) else {
+                break;
+            };
+            missing.push(cursor);
+            cursor = up;
+        }
         fs::create_dir_all(parent)
             .map_err(|e| format!("创建系统目录 {} 失败: {e}", parent.display()))?;
-        set_permissions(parent, 0o755)?;
+        for dir in missing {
+            set_permissions(&dir, 0o755)?;
+        }
     }
 
     atomic_write(path, bytes)?;

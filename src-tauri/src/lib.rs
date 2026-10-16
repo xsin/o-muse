@@ -53,6 +53,11 @@ pub fn run() {
             commands::plugin_scanner::delete_plugin_permanently,
             commands::license::get_tier,
             commands::license::activate_license_key,
+            commands::updater::current_version,
+            commands::updater::update_check,
+            commands::updater::update_install,
+            commands::updater::update_apply,
+            commands::updater::app_exit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running O Muse");

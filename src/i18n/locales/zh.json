@@ -1,1 +1,375 @@
-{"app":{"title":"O Muse"},"nav":{"market":"工具箱","settings":"设置"},"apps":{"stem_separation":{"name":"分轨分离","brandPath":"O Muse / 分轨","desc":"将音轨拆分为人声、鼓、贝斯与其他分轨。"},"libraries":{"name":"Kontakt 库管理","brandPath":"O Muse / 音色库","desc":"只读盘点你的 Kontakt / Native Instruments 音色库。"},"plugins":{"name":"音频插件管理器","brandPath":"O Muse / 插件","desc":"扫描并整理你的 AU / VST / VST3 / CLAP 插件。","soon":"即将推出"}},"market":{"heading":"工具箱","subtitle":"选择一个工具，在新标签页中打开。","open":"打开"},"settings":{"heading":"设置","language":"语言","theme":"主题","tier":"许可","tierFree":"免费版","tierPro":"专业版","activated":"Pro 已激活","invalidKey":"密钥无效，仍为免费版","activateFailed":"激活失败：{{err}}"},"theme":{"light":"浅色","dark":"深色","system":"跟随系统"},"language":{"en":"English","zh":"中文"},"library":{"scanning":"正在扫描…","scan":"扫描音色库","empty":"未找到任何音色库。","registered":"已注册","unregistered":"未注册","diagnostics":"诊断","cols":{"name":"名称","snpid":"SNPID","path":"路径","status":"状态"},"diag":{"MissingPath":"路径缺失","DuplicateSnpid":"SNPID 重复","DisconnectedVolume":"卷已断开","MissingMetadata":"元数据缺失"}},"common":{"close":"关闭","cancel":"取消","confirm":"确认","refresh":"刷新","search":"搜索","actions":"操作"},"plugins":{"scanning":"正在扫描插件…","scan":"扫描插件","rescan":"重新扫描","empty":"未找到任何插件。","search":"搜索名称或厂商…","sources":"扫描源","addDir":"添加自定义目录","addDirPro":"添加自定义目录（专业版）","custom":"自定义","standard":"标准","enabled":"启用","remove":"移除","pickDir":"选择插件目录","proRequired":"此功能需要 O Muse Pro 订阅","added":"已添加目录","cols":{"name":"名称","vendor":"厂商","version":"版本","format":"格式","path":"路径","size":"大小","installedAt":"安装时间","actions":"操作"},"count":"共 {{n}} 个插件","cached":"已缓存","failed":"扫描失败：{{err}}","cachedCount":"已缓存 {{hits}} / {{total}}","totalCount":"共 {{n}} 个","unknownVendor":"未标注厂商","cacheWarning":"元数据缓存已降级","formats":{"all":"全部格式"},"space":{"title":"空间占用","summary":"已扫描 {{n}} 个插件，合计 {{size}}"},"byFormat":"按格式","byVendor":"按厂商（点击筛选）","filter":{"clear":"清除筛选","vendorHint":"{{name}} · {{n}} 个插件 · {{size}}"},"tag":{"symlink":"软链","broken":"链接失效","missingTarget":"（目标不存在）","symlinkCount":"{{n}} 个已移走（软链）","brokenCount":"{{n}} 个失效链接"},"actions":{"move":"移动…","trash":"删除","undo":"还原"},"move":{"title":"移动「{{name}}」","symlinkNote":"真实文件会搬到你所选的目标目录，并在原位置留下一个符号链接。macOS 的「别名」只是 Finder 书签，DAW 的扫描器不会解析它；软链由内核透明解析，DAW 与系统扫描器照常找到这个插件。","pickTarget":"选择目标目录","noTarget":"尚未选择目标目录","planning":"正在计算…","size":"预计搬运：{{size}}","free":"目标可用空间：{{size}}","insufficient":"目标卷可用空间不足。","confirm":"确认移动","working":"移动中…","cancel":"取消","done":"已移动，原位置已留软链：{{path}}"},"delete":{"title":"删除「{{name}}」","warning":"将移到废纸篓，可从废纸篓恢复","body":"插件会被移到废纸篓（之后可以从废纸篓放回），这里不会永久删除。","linkNote":"该条目是软链：删除只会移除这个链接，真实文件仍保留在 {{path}}。若要一并处理真实文件，请先用「还原」。","typeHint":"请输入 {{name}} 以确认","mismatch":"名称不匹配。","trash":"移到废纸篓","permanent":"永久删除","permanentDone":"已永久删除。","working":"删除中…","done":"已移入废纸篓：{{path}}","cancel":"取消"},"undo":{"title":"还原「{{name}}」","body":"会把 {{path}} 处的真实文件搬回原位置，并删除软链。","confirm":"确认还原","working":"还原中…","cancel":"取消","done":"已还原到原位置。"}},"stem":{"pickFile":"选择音频文件","noFile":"尚未选择文件","start":"开始分轨","separating":"正在分轨…","output":"输出目录","files":"分轨文件","demoMode":"演示模式（Demucs 不可用，返回模拟结果）","status":{"queued":"排队中","processing":"处理中","done":"完成","error":"失败","demo_done":"完成（演示）"},"error":"分轨失败：{{err}}","openFolder":"在访达中显示","ready":"已就绪","idle":"选择一个音频文件开始。","hint":"支持常见音频格式；首次运行会启动本地分轨服务。","stop":"停止","emptyFiles":"暂无分轨文件。","needRuntime":"分轨运行时尚未安装，请先到「设置 → 分轨运行时」下载。","goSettings":"前往设置","analyze":"分析","analyzing":"分析中…","analysisTitle":"曲目分析","separationTitle":"分轨","noAnalysis":"选择文件后点「分析」，几秒内给出调性与速度。","analysisHint":"调性与速度取曲目中段最多 60 秒做统计。","key":"调性","bpm":"速度","duration":"时长","keyConfidence":"调性置信度","tempoConfidence":"速度置信度","camelot":"Camelot {{code}}","halfTime":"半速 {{bpm}}","doubleTime":"倍速 {{bpm}}","device":"设备","deviceMps":"MPS 加速","deviceCpu":"CPU（无 MPS 加速）","deviceFallback":"已回退 CPU：{{note}}","tabFiles":"分轨文件","tabInfo":"运行信息","jobId":"任务 ID","stemsReady":"共 {{n}} 条分轨","separationDone":"分轨已完成。","unknownError":"未知错误","mode":{"major":"大调","minor":"小调"},"stemNames":{"vocals":"人声","drums":"鼓","bass":"贝斯","other":"其他"},"cols":{"name":"分轨","size":"大小","path":"路径","actions":"操作"},"stage":{"queued":"排队中","loading_model":"加载模型","reading_audio":"读取音频","separating":"正在分轨","writing_stems":"写出分轨文件","separating_done":"收尾","fallback_cpu":"MPS 不可用，改用 CPU 重试","analyzing":"分析中","analyzing_key":"检测调性","analyzing_tempo":"检测速度","done":"完成","failed":"失败"},"notStarted":"尚未开始。","sourceTitle":"音频文件"},"runtime":{"title":"分轨运行时","desc":"分轨依赖 PyTorch，体积较大（约 {{size}}），因此不随安装包分发，首次使用时按需下载。","status":"状态","missing":"未安装","ready":"已就绪","failed":"失败","installing":"安装中","size":"占用空间","install":"下载并安装","reinstall":"重新安装","remove":"卸载","removed":"运行时已卸载","estimate":"预计下载约 {{size}}","needPython":"需要联网下载，请保持网络畅通。","stages":{"checking":"检查中…","downloading_python":"下载 Python 运行时","verifying":"校验","extracting":"解压","creating_venv":"创建隔离环境","installing_deps":"安装依赖","downloading_model":"下载分轨模型","ready":"就绪","missing":"未安装","failed":"失败"},"confirmRemove":"确定卸载分轨运行时？将释放约 900MB 空间，下次使用分轨需重新下载。"},"kontakt":{"title":"Kontakt 库管理","scan":"扫描已安装库","scanning":"正在扫描…","addLib":"添加库…","scanDir":"扫描磁盘目录…","empty":"未发现任何 Kontakt 库。","cols":{"name":"名称","snpid":"SNPID","size":"占用","path":"内容路径","status":"状态","actions":"操作"},"registered":"已注册","diskOnly":"仅磁盘存在","issues":"问题","remove":"移除注册","removeConfirm":"仅删除 Kontakt 注册记录，不会删除磁盘上的音色文件。确定继续？","removed":"已移除注册。","openInFinder":"在访达中显示","licMissing":"缺少 .nicnt 文件","createNicnt":"创建 .nicnt…","nicntHint":"Kontakt 依靠库根目录下的 .nicnt 文件识别音色库。缺少它时 Kontakt 不会显示该库。","nicntForm":{"name":"库名称","regKey":"RegKey","snpid":"SNPID","company":"厂商","type":"类型","upid":"UPID（可选）","visibility":"可见性"},"nicntCreated":"已创建 .nicnt：{{path}}","nicntExists":"该目录已存在 .nicnt，未覆盖。","needAdmin":"该来源位于 /Library，需要管理员授权。继续前会列出将写入的具体文件与原因。","dupSnpid":"SNPID 重复","dupPath":"内容路径重复","missingPath":"内容路径不存在","hidden":"在 Kontakt 中隐藏","selectDir":"选择音色库根目录","added":"已添加：{{name}}","total":"共 {{n}} 个库，占用 {{size}}","priv":{"title":"需要管理员权限","intro":"补全「{{name}}」的系统级注册需要写入以下文件，macOS 会要求输入管理员密码。","notice":"继续后 macOS 会要求输入管理员密码。本操作只写入上述文件，不会修改磁盘上的音色文件。","actionWrite":"写入","actionRemove":"删除","continue":"继续","decline":"跳过","applied":"系统级注册已更新（{{n}} 个文件）。","cancelled":"已取消授权，未改动任何系统文件。","reasonXml":"Kontakt 的经典浏览器读取此文件识别音色库；缺少它时该库不会出现在 Libraries 列表","reasonPlist":"记录该库的内容路径与可见性","reasonXmlRemove":"删除后，该库将从 Kontakt 经典浏览器中消失","reasonPlistRemove":"删除该库的系统级内容路径与可见性记录"}}}
+{
+  "app": {
+    "title": "O Muse"
+  },
+  "nav": {
+    "market": "工具箱",
+    "settings": "设置"
+  },
+  "apps": {
+    "stem_separation": {
+      "name": "分轨分离",
+      "brandPath": "O Muse / 分轨",
+      "desc": "将音轨拆分为人声、鼓、贝斯与其他分轨。"
+    },
+    "libraries": {
+      "name": "Kontakt 库管理",
+      "brandPath": "O Muse / 音色库",
+      "desc": "只读盘点你的 Kontakt / Native Instruments 音色库。"
+    },
+    "plugins": {
+      "name": "音频插件管理器",
+      "brandPath": "O Muse / 插件",
+      "desc": "扫描并整理你的 AU / VST / VST3 / CLAP 插件。",
+      "soon": "即将推出"
+    }
+  },
+  "market": {
+    "heading": "工具箱",
+    "subtitle": "选择一个工具，在新标签页中打开。",
+    "open": "打开"
+  },
+  "settings": {
+    "heading": "设置",
+    "language": "语言",
+    "theme": "主题",
+    "tier": "许可",
+    "tierFree": "免费版",
+    "tierPro": "专业版",
+    "activated": "Pro 已激活",
+    "invalidKey": "密钥无效，仍为免费版",
+    "activateFailed": "激活失败：{{err}}"
+  },
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "language": {
+    "en": "English",
+    "zh": "中文"
+  },
+  "library": {
+    "scanning": "正在扫描…",
+    "scan": "扫描音色库",
+    "empty": "未找到任何音色库。",
+    "registered": "已注册",
+    "unregistered": "未注册",
+    "diagnostics": "诊断",
+    "cols": {
+      "name": "名称",
+      "snpid": "SNPID",
+      "path": "路径",
+      "status": "状态"
+    },
+    "diag": {
+      "MissingPath": "路径缺失",
+      "DuplicateSnpid": "SNPID 重复",
+      "DisconnectedVolume": "卷已断开",
+      "MissingMetadata": "元数据缺失"
+    }
+  },
+  "common": {
+    "close": "关闭",
+    "cancel": "取消",
+    "confirm": "确认",
+    "refresh": "刷新",
+    "search": "搜索",
+    "actions": "操作"
+  },
+  "plugins": {
+    "scanning": "正在扫描插件…",
+    "scan": "扫描插件",
+    "rescan": "重新扫描",
+    "empty": "未找到任何插件。",
+    "search": "搜索名称或厂商…",
+    "sources": "扫描源",
+    "addDir": "添加自定义目录",
+    "addDirPro": "添加自定义目录（专业版）",
+    "custom": "自定义",
+    "standard": "标准",
+    "enabled": "启用",
+    "remove": "移除",
+    "pickDir": "选择插件目录",
+    "proRequired": "此功能需要 O Muse Pro 订阅",
+    "added": "已添加目录",
+    "cols": {
+      "name": "名称",
+      "vendor": "厂商",
+      "version": "版本",
+      "format": "格式",
+      "path": "路径",
+      "size": "大小",
+      "installedAt": "安装时间",
+      "actions": "操作"
+    },
+    "count": "共 {{n}} 个插件",
+    "cached": "已缓存",
+    "failed": "扫描失败：{{err}}",
+    "cachedCount": "已缓存 {{hits}} / {{total}}",
+    "totalCount": "共 {{n}} 个",
+    "unknownVendor": "未标注厂商",
+    "cacheWarning": "元数据缓存已降级",
+    "formats": {
+      "all": "全部格式"
+    },
+    "space": {
+      "title": "空间占用",
+      "summary": "已扫描 {{n}} 个插件，合计 {{size}}"
+    },
+    "byFormat": "按格式",
+    "byVendor": "按厂商（点击筛选）",
+    "filter": {
+      "clear": "清除筛选",
+      "vendorHint": "{{name}} · {{n}} 个插件 · {{size}}"
+    },
+    "tag": {
+      "symlink": "软链",
+      "broken": "链接失效",
+      "missingTarget": "（目标不存在）",
+      "symlinkCount": "{{n}} 个已移走（软链）",
+      "brokenCount": "{{n}} 个失效链接"
+    },
+    "actions": {
+      "move": "移动…",
+      "trash": "删除",
+      "undo": "还原"
+    },
+    "move": {
+      "title": "移动「{{name}}」",
+      "symlinkNote": "真实文件会搬到你所选的目标目录，并在原位置留下一个符号链接。macOS 的「别名」只是 Finder 书签，DAW 的扫描器不会解析它；软链由内核透明解析，DAW 与系统扫描器照常找到这个插件。",
+      "pickTarget": "选择目标目录",
+      "noTarget": "尚未选择目标目录",
+      "planning": "正在计算…",
+      "size": "预计搬运：{{size}}",
+      "free": "目标可用空间：{{size}}",
+      "insufficient": "目标卷可用空间不足。",
+      "confirm": "确认移动",
+      "working": "移动中…",
+      "cancel": "取消",
+      "done": "已移动，原位置已留软链：{{path}}"
+    },
+    "delete": {
+      "title": "删除「{{name}}」",
+      "warning": "将移到废纸篓，可从废纸篓恢复",
+      "body": "插件会被移到废纸篓（之后可以从废纸篓放回），这里不会永久删除。",
+      "linkNote": "该条目是软链：删除只会移除这个链接，真实文件仍保留在 {{path}}。若要一并处理真实文件，请先用「还原」。",
+      "typeHint": "请输入 {{name}} 以确认",
+      "mismatch": "名称不匹配。",
+      "trash": "移到废纸篓",
+      "permanent": "永久删除",
+      "permanentDone": "已永久删除。",
+      "working": "删除中…",
+      "done": "已移入废纸篓：{{path}}",
+      "cancel": "取消"
+    },
+    "undo": {
+      "title": "还原「{{name}}」",
+      "body": "会把 {{path}} 处的真实文件搬回原位置，并删除软链。",
+      "confirm": "确认还原",
+      "working": "还原中…",
+      "cancel": "取消",
+      "done": "已还原到原位置。"
+    }
+  },
+  "stem": {
+    "pickFile": "选择音频文件",
+    "noFile": "尚未选择文件",
+    "start": "开始分轨",
+    "separating": "正在分轨…",
+    "output": "输出目录",
+    "files": "分轨文件",
+    "demoMode": "演示模式（Demucs 不可用，返回模拟结果）",
+    "status": {
+      "queued": "排队中",
+      "processing": "处理中",
+      "done": "完成",
+      "error": "失败",
+      "demo_done": "完成（演示）"
+    },
+    "error": "分轨失败：{{err}}",
+    "openFolder": "在访达中显示",
+    "ready": "已就绪",
+    "idle": "选择一个音频文件开始。",
+    "hint": "支持常见音频格式；首次运行会启动本地分轨服务。",
+    "stop": "停止",
+    "emptyFiles": "暂无分轨文件。",
+    "needRuntime": "分轨运行时尚未安装，请先到「设置 → 分轨运行时」下载。",
+    "goSettings": "前往设置",
+    "analyze": "分析",
+    "analyzing": "分析中…",
+    "analysisTitle": "曲目分析",
+    "separationTitle": "分轨",
+    "noAnalysis": "选择文件后点「分析」，几秒内给出调性与速度。",
+    "analysisHint": "调性与速度取曲目中段最多 60 秒做统计。",
+    "key": "调性",
+    "bpm": "速度",
+    "duration": "时长",
+    "keyConfidence": "调性置信度",
+    "tempoConfidence": "速度置信度",
+    "camelot": "Camelot {{code}}",
+    "halfTime": "半速 {{bpm}}",
+    "doubleTime": "倍速 {{bpm}}",
+    "device": "设备",
+    "deviceMps": "MPS 加速",
+    "deviceCpu": "CPU（无 MPS 加速）",
+    "deviceFallback": "已回退 CPU：{{note}}",
+    "tabFiles": "分轨文件",
+    "tabInfo": "运行信息",
+    "jobId": "任务 ID",
+    "stemsReady": "共 {{n}} 条分轨",
+    "separationDone": "分轨已完成。",
+    "unknownError": "未知错误",
+    "mode": {
+      "major": "大调",
+      "minor": "小调"
+    },
+    "stemNames": {
+      "vocals": "人声",
+      "drums": "鼓",
+      "bass": "贝斯",
+      "other": "其他"
+    },
+    "cols": {
+      "name": "分轨",
+      "size": "大小",
+      "path": "路径",
+      "actions": "操作"
+    },
+    "stage": {
+      "queued": "排队中",
+      "loading_model": "加载模型",
+      "reading_audio": "读取音频",
+      "separating": "正在分轨",
+      "writing_stems": "写出分轨文件",
+      "separating_done": "收尾",
+      "fallback_cpu": "MPS 不可用，改用 CPU 重试",
+      "analyzing": "分析中",
+      "analyzing_key": "检测调性",
+      "analyzing_tempo": "检测速度",
+      "done": "完成",
+      "failed": "失败"
+    },
+    "notStarted": "尚未开始。",
+    "sourceTitle": "音频文件"
+  },
+  "runtime": {
+    "title": "分轨运行时",
+    "desc": "分轨依赖 PyTorch，体积较大（约 {{size}}），因此不随安装包分发，首次使用时按需下载。",
+    "status": "状态",
+    "missing": "未安装",
+    "ready": "已就绪",
+    "failed": "失败",
+    "installing": "安装中",
+    "size": "占用空间",
+    "install": "下载并安装",
+    "reinstall": "重新安装",
+    "remove": "卸载",
+    "removed": "运行时已卸载",
+    "estimate": "预计下载约 {{size}}",
+    "needPython": "需要联网下载，请保持网络畅通。",
+    "stages": {
+      "checking": "检查中…",
+      "downloading_python": "下载 Python 运行时",
+      "verifying": "校验",
+      "extracting": "解压",
+      "creating_venv": "创建隔离环境",
+      "installing_deps": "安装依赖",
+      "downloading_model": "下载分轨模型",
+      "ready": "就绪",
+      "missing": "未安装",
+      "failed": "失败"
+    },
+    "confirmRemove": "确定卸载分轨运行时？将释放约 900MB 空间，下次使用分轨需重新下载。"
+  },
+  "kontakt": {
+    "title": "Kontakt 库管理",
+    "scan": "扫描已安装库",
+    "scanning": "正在扫描…",
+    "addLib": "添加库…",
+    "scanDir": "扫描磁盘目录…",
+    "empty": "未发现任何 Kontakt 库。",
+    "cols": {
+      "name": "名称",
+      "snpid": "SNPID",
+      "size": "占用",
+      "path": "内容路径",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "registered": "已注册",
+    "diskOnly": "仅磁盘存在",
+    "issues": "问题",
+    "remove": "移除注册",
+    "removeConfirm": "仅删除 Kontakt 注册记录，不会删除磁盘上的音色文件。确定继续？",
+    "removed": "已移除注册。",
+    "openInFinder": "在访达中显示",
+    "licMissing": "缺少 .nicnt 文件",
+    "createNicnt": "创建 .nicnt…",
+    "nicntHint": "Kontakt 依靠库根目录下的 .nicnt 文件识别音色库。缺少它时 Kontakt 不会显示该库。",
+    "nicntForm": {
+      "name": "库名称",
+      "regKey": "RegKey",
+      "snpid": "SNPID",
+      "company": "厂商",
+      "type": "类型",
+      "upid": "UPID（可选）",
+      "visibility": "可见性"
+    },
+    "nicntCreated": "已创建 .nicnt：{{path}}",
+    "nicntExists": "该目录已存在 .nicnt，未覆盖。",
+    "needAdmin": "该来源位于 /Library，需要管理员授权。继续前会列出将写入的具体文件与原因。",
+    "dupSnpid": "SNPID 重复",
+    "dupPath": "内容路径重复",
+    "missingPath": "内容路径不存在",
+    "hidden": "在 Kontakt 中隐藏",
+    "selectDir": "选择音色库根目录",
+    "added": "已添加：{{name}}",
+    "total": "共 {{n}} 个库，占用 {{size}}",
+    "priv": {
+      "title": "需要管理员权限",
+      "intro": "补全「{{name}}」的系统级注册需要写入以下文件，macOS 会要求输入管理员密码。",
+      "notice": "继续后 macOS 会要求输入管理员密码。本操作只写入上述文件，不会修改磁盘上的音色文件。",
+      "actionWrite": "写入",
+      "actionRemove": "删除",
+      "continue": "继续",
+      "decline": "跳过",
+      "applied": "系统级注册已更新（{{n}} 个文件）。",
+      "cancelled": "已取消授权，未改动任何系统文件。",
+      "reasonXml": "Kontakt 的经典浏览器读取此文件识别音色库；缺少它时该库不会出现在 Libraries 列表",
+      "reasonPlist": "记录该库的内容路径与可见性",
+      "reasonXmlRemove": "删除后，该库将从 Kontakt 经典浏览器中消失",
+      "reasonPlistRemove": "删除该库的系统级内容路径与可见性记录",
+      "replanned": "文件清单已变化，请重新确认。"
+    }
+  },
+  "update": {
+    "title": "更新",
+    "current": "当前版本",
+    "autoCheck": "自动检查更新",
+    "check": "检查更新",
+    "checkNow": "检查更新",
+    "checking": "正在检查…",
+    "upToDate": "当前已是最新版本。",
+    "available": "有新版本",
+    "versionLine": "当前 {{current}} → 新版本 {{next}}",
+    "size": "下载体积 {{size}}",
+    "showNotes": "更新要点",
+    "hideNotes": "收起详情",
+    "noNotes": "此版本没有更新说明。",
+    "released": "发布于 {{date}}",
+    "later": "稍后",
+    "update": "更新",
+    "retry": "重试",
+    "installing": "正在安装…",
+    "failed": "更新失败：{{err}}",
+    "checkFailed": "检查更新失败：{{err}}",
+    "source": "更新源",
+    "stages": {
+      "downloading": "正在下载更新包…",
+      "verifying": "正在校验更新包…",
+      "extracting": "正在解压…",
+      "installing": "正在安装…"
+    }
+  }
+}

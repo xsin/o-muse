@@ -5,6 +5,7 @@ pub mod library_manager;
 pub mod plugin_scanner;
 pub mod license;
 pub mod kontakt;
+pub mod updater;
 
 /// 骨架探针命令：证明命令模块已正确注册到 Tauri invoke handler。
 #[tauri::command]

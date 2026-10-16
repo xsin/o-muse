@@ -92,7 +92,30 @@ jobs:
           mkdir -p "$SITE/releases/latest"
           cp scripts/release/install.sh        "$SITE/releases/latest/install.sh"
           cp "$SITE/releases/$V/checksums.txt" "$SITE/releases/latest/checksums.txt"
+          # 自动更新清单：客户端从此路径拉取（与 core/updater 的常量一致）
+          cp "$SITE/releases/$V/latest.json"   "$SITE/releases/latest/latest.json"
           echo "$V" > "$SITE/releases/latest/VERSION.txt"
+
+      # 发布前自检：清单必须合法，且平台键与客户端约定一致
+      # （产物命名用 arm64，而平台键必须是 aarch64 —— 这里守住二者不被混淆）
+      - name: Validate latest.json
+        run: |
+          set -euo pipefail
+          V="${{ steps.ver.outputs.version }}"
+          python3 - "$RUNNER_TEMP/site/releases/$V/latest.json" "$V" <<'PY'
+          import json, sys
+          path, expect_version = sys.argv[1], sys.argv[2]
+          d = json.load(open(path, encoding="utf-8"))
+          assert d["version"] == expect_version, f"版本不一致: {d['version']} != {expect_version}"
+          plats = d.get("platforms") or {}
+          assert plats, "platforms 为空"
+          for key in plats:
+              assert key in ("darwin-aarch64", "darwin-x86_64"), f"平台键非法: {key}"
+          for key, asset in plats.items():
+              assert asset["url"].startswith("https://"), f"{key} 的 url 必须为 https"
+              assert len(asset["sha256"]) == 64, f"{key} 的 sha256 长度异常"
+          print("latest.json OK:", d["version"], list(plats))
+          PY
 
       # 推送到 gh-pages 分支（GitHub Pages 需在仓库设置里开启，指向该分支根目录）
       - name: Publish to gh-pages
@@ -127,21 +150,28 @@ jobs:
           # 同时清掉可能已存在的同名远端 tag，避免 tag 指向旧提交
           git push origin ":refs/tags/$TAG" 2>/dev/null || true
 
+          # 注意：notes 必须经**文件**传入。若在这里内联多行字符串，
+          # 顶格的行会终止 YAML 块标量，导致整个 workflow 解析失败。
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "公测版：ad-hoc 签名分发，未经 Apple 公证。"
+            echo ""
+            echo "**安装（推荐）**"
+            echo ""
+            echo '```bash'
+            echo "curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash"
+            echo '```'
+            echo ""
+            echo "**手动下载**：见下方 Assets。首次打开若被 Gatekeeper 阻止，"
+            echo "请右键 → 打开，或执行 xattr -dr com.apple.quarantine。"
+            echo ""
+            echo "完整说明见 https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/tech-release-without-developer-id.md"
+          } > "$NOTES"
+
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "O Muse ${V} (public beta)" \
-            --notes "公测版：ad-hoc 签名分发，未经 Apple 公证。
-
-**安装（推荐）**
-
-\`\`\`bash
-curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash
-\`\`\`
-
-**手动下载**：见下方 Assets。首次打开若被 Gatekeeper 阻止，请右键 → 打开，
-或执行 \`xattr -dr com.apple.quarantine ~/Applications/O\\ Muse.app\`。
-
-完整说明见 [docs/tech-release-without-developer-id.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/tech-release-without-developer-id.md)。" \
+            --notes-file "$NOTES" \
             --generate-notes
 
           # 归档产物（与 gh-pages 同一份构建产物）

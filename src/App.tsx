@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Toast } from "@heroui/react";
 import { useUI, type ActiveView } from "./store/useUI";
 import Sidebar from "./components/Sidebar";
+import UpdateBanner from "./components/UpdateBanner";
 import MarketPage from "./pages/MarketPage";
 import SettingsPage from "./pages/SettingsPage";
 import StemSeparationPage from "./pages/StemSeparationPage";
@@ -50,19 +51,23 @@ export default function App() {
 
   return (
     <Toast.Provider>
-      <div className="flex h-full bg-background text-foreground">
-        <Sidebar />
-        <main className="min-w-0 flex-1 overflow-auto p-6">
-          {activeView === "market" && <MarketPage />}
-          {activeView === "settings" && <SettingsPage />}
-          {openApps.map((id) => (
-            <div key={id} className={activeView === id ? "block" : "hidden"}>
-              {id === "stem_separation" && <StemSeparationPage />}
-              {id === "libraries" && <KontaktLibraryPage />}
-              {id === "plugins" && <PluginManagerPage />}
-            </div>
-          ))}
-        </main>
+      <div className="flex h-full flex-col bg-background text-foreground">
+        {/* 有可用更新时在顶部显示非模态提示条（自动检查 + 一键更新） */}
+        <UpdateBanner />
+        <div className="flex min-h-0 flex-1">
+          <Sidebar />
+          <main className="min-w-0 flex-1 overflow-auto p-6">
+            {activeView === "market" && <MarketPage />}
+            {activeView === "settings" && <SettingsPage />}
+            {openApps.map((id) => (
+              <div key={id} className={activeView === id ? "block" : "hidden"}>
+                {id === "stem_separation" && <StemSeparationPage />}
+                {id === "libraries" && <KontaktLibraryPage />}
+                {id === "plugins" && <PluginManagerPage />}
+              </div>
+            ))}
+          </main>
+        </div>
       </div>
     </Toast.Provider>
   );
