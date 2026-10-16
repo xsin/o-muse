@@ -140,11 +140,19 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
     fi
   else
     echo "[build] 构建单架构：${ARCH_LABEL}"
+    # 必须**不加** --no-bundle：它只产出可执行文件、不产出 .app，
+    # 后续找不到 bundle 会直接失败（这正是 CI 报"未找到 .app 产物"的原因）。
     (cd "$REPO_ROOT" && CARGO_HOME="${CARGO_HOME:-$REPO_ROOT/.cargo-home}" \
       npm_config_cache="${npm_config_cache:-$REPO_ROOT/.npm-cache}" \
-      node_modules/.bin/tauri build --target "$RUST_TARGETS" --no-bundle --ci)
-    APP_BUNDLE="$(find "$REPO_ROOT/src-tauri/target/$RUST_TARGETS/release" -maxdepth 1 -name "*.app" | head -n1)"
-    [ -n "$APP_BUNDLE" ] || { echo "未找到 .app 产物" >&2; exit 1; }
+      node_modules/.bin/tauri build --target "$RUST_TARGETS" --ci)
+    # .app 在 target/<triple>/release/bundle/macos/ 下，**不在** release/ 根目录；
+    # 之前找 release/ 根导致 CI 报"未找到 .app 产物"（本地只测过 --skip-build 分支所以漏了）。
+    APP_BUNDLE="$(find "$REPO_ROOT/src-tauri/target/$RUST_TARGETS/release/bundle/macos" \
+      -maxdepth 1 -name "*.app" 2>/dev/null | head -n1)"
+    [ -n "$APP_BUNDLE" ] || {
+      echo "未找到 .app 产物（已查找 target/$RUST_TARGETS/release/bundle/macos）" >&2
+      exit 1
+    }
   fi
 else
   echo "[build] 跳过构建（--skip-build），查找既有产物"
