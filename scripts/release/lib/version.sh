@@ -24,7 +24,7 @@ read_product_name() {
   python3 - "$TAURI_CONF" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
-    print(json.load(f).get("productName", "Music Rig"))
+    print(json.load(f).get("productName", "O Muse"))
 PY
 }
 

@@ -1,4 +1,4 @@
-"""Music Rig 分轨后端服务（Task 2，独立实现）。
+"""O Muse 分轨后端服务（Task 2，独立实现）。
 
 FastAPI 服务，承载音频分轨能力：
 - POST   /separate          提交分轨任务，返回 job_id
@@ -24,7 +24,7 @@ from separator import DemucsSeparator
 
 import constants
 
-app = FastAPI(title="Music Rig Stem Separation Backend")
+app = FastAPI(title="O Muse Stem Separation Backend")
 
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()

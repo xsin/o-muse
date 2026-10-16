@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Music Rig 公测期打包脚本（ad-hoc 签名，无 Developer ID / 无公证）
+# O Muse 公测期打包脚本（ad-hoc 签名，无 Developer ID / 无公证）
 #
 # 用法：
 #   scripts/release/build.sh [--arch arm64|x86_64|universal] [--out-dir <dir>] [--skip-build]

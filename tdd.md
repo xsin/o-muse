@@ -1,4 +1,4 @@
-# TDD — Technical Design Document: Music Rig
+# TDD — Technical Design Document: O Muse
 
 > 读者：实现者 / Agent（配合 `brd.md` / `prd.md`）。
 > 本文件聚焦**怎么做**：技术栈版本、目录结构、关键模块契约、命令签名、许可证合规、跨平台与 Dodo 集成。
@@ -61,7 +61,7 @@ music-rig/
 export interface AppDef {
   id: 'stemdeck' | 'libraries' | 'plugins';
   name: string;          // "StemDeck" / "Kontakt Library Manager" / "Audio Plugin Manager"
-  brandPath: string;     // "Music Rig / Separate" 等
+  brandPath: string;     // "O Muse / Separate" 等
   route: string;         // "/apps/stemdeck" ...
   icon: string;          // svg path / asset
   enabled: boolean;      // plugins=false in v1

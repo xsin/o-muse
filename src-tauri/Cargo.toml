@@ -1,13 +1,13 @@
 [package]
-name = "music-rig"
+name = "o-muse"
 version = "0.1.0"
-description = "Music Rig — 音乐人的全能工具箱"
-authors = ["Music Rig"]
+description = "O Muse — 音乐人的全能工具箱"
+authors = ["O Muse"]
 edition = "2021"
 rust-version = "1.85"
 
 [lib]
-name = "music_rig_lib"
+name = "o_muse_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

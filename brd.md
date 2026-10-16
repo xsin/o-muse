@@ -1,11 +1,11 @@
-# BRD — Business Requirements Document: Music Rig
+# BRD — Business Requirements Document: O Muse
 
 > 读者：产品/商业决策者、Agent 实现者（配合 `prd.md` / `tdd.md`）。
 > 本文件聚焦**为什么做**与**商业边界**；功能细节见 `prd.md`，技术约束见 `tdd.md`。
 
 ## 1. 产品愿景
 
-**Music Rig** 是面向音乐人的**本地桌面助手**，长期定位为"**面向音乐人的应用市场（App Marketplace）**"——每个独立功能是一个 **App**，可由壳动态承载、常驻、多开并存。v1 以本地打包的两个核心工具起步，未来可持续扩展音乐创作小工具。
+**O Muse** 是面向音乐人的**本地桌面助手**，长期定位为"**面向音乐人的应用市场（App Marketplace）**"——每个独立功能是一个 **App**，可由壳动态承载、常驻、多开并存。v1 以本地打包的两个核心工具起步，未来可持续扩展音乐创作小工具。
 
 - 战略愿景标签：**应用市场（App Marketplace）**
 - v1 实际首页 UI 标签：**工具箱**（避免"市场=可下载商店"的误解，见 `GLOSSARY.md`）
@@ -34,10 +34,10 @@
 
 ## 5. 品牌与命名
 
-- 产品名：**Music Rig**；Pro 版本：**Music Rig Pro**。
-- 子模块品牌结构：`Music Rig / <App 名>`，如 `Music Rig / Separate`、`Music Rig / Libraries`、`Music Rig / Plugins`。
+- 产品名：**O Muse**；Pro 版本：**O Muse Pro**。
+- 子模块品牌结构：`O Muse / <App 名>`，如 `O Muse / Separate`、`O Muse / Libraries`、`O Muse / Plugins`。
 - 商标与域名核查为**人工任务**（非 Agent 范畴）：USPTO TESS、中国商标网、EUIPO、域名 `musicrig.app/.com/.audio`、各商店/平台同名检索。
-- 对外文案统一 "Music Rig"；`tauri.conf.json` `productName: "Music Rig"`、`identifier: "app.musicrig.desktop"`。
+- 对外文案统一 "O Muse"；`tauri.conf.json` `productName: "O Muse"`、`identifier: "app.musicrig.desktop"`。
 
 ## 6. 商业约束与合规
 

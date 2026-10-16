@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
-const STORE_FILE: &str = "music-rig.dat";
+const STORE_FILE: &str = "o-muse.dat";
 
 /// Task 1 占位命令：验证 plugin_scanner 命令模块已注册。
 #[allow(dead_code)]

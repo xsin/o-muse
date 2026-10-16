@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Music Rig",
+  "productName": "O Muse",
   "version": "0.1.0",
-  "identifier": "com.musicrig.desktop",
+  "identifier": "com.omuse.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Music Rig",
+        "title": "O Muse",
         "width": 1280,
         "height": 800,
         "minWidth": 960,

@@ -2,6 +2,11 @@ name: Release (public beta, ad-hoc signing)
 
 # 触发：推送 v* 标签。公测阶段不购买 Apple Developer Program，
 # 因此使用 ad-hoc 签名 + zip 分发（见 docs/tech-release-without-developer-id.md）。
+#
+# 托管：产物发布到 gh-pages 分支的 releases/ 下，由 GitHub Pages 提供服务：
+#   https://xsin.github.io/o-muse/releases/latest/install.sh
+# 安装脚本同时兼容 <version>/ 与 <version>/download/ 两种路径布局，
+# 因此将来若迁到 GitHub Releases 附件，安装脚本无需改动。
 
 on:
   push:
@@ -9,15 +14,15 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "版本号（留空则从 tauri.conf.json 读取）"
+      force_version:
+        description: "覆盖版本号（留空则从 tauri.conf.json 读取）"
         required: false
 
 permissions:
-  contents: write   # 上传 Release 产物所需
+  contents: write   # 推送 gh-pages 分支所需
 
 jobs:
-  build-macos:
+  build-and-publish:
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -28,9 +33,12 @@ jobs:
         id: ver
         run: |
           VERSION="$(bash scripts/release/lib/version.sh version)"
+          if [ -n "${{ github.event.inputs.force_version }}" ]; then
+            VERSION="${{ github.event.inputs.force_version }}"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=${GITHUB_REF_NAME:-$VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Music Rig version: $VERSION"
+          echo "tag=${GITHUB_REF_NAME:-v$VERSION}" >> "$GITHUB_OUTPUT"
+          echo "O Muse version: $VERSION"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -38,7 +46,7 @@ jobs:
           node-version: "20"
           cache: npm
 
-      # Rust target：universal 需要两个 target；缺一个则自动退化为单架构
+      # universal 需要两个 target；缺一个时 build.sh 自动退化为单架构包
       - name: Install Rust targets
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
@@ -57,60 +65,58 @@ jobs:
           APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/releases"
+          mkdir -p "$RUNNER_TEMP/site"
           bash scripts/release/build.sh \
             --arch universal \
-            --out-dir "$RUNNER_TEMP/releases/${{ steps.ver.outputs.version }}"
+            --out-dir "$RUNNER_TEMP/site/releases/${{ steps.ver.outputs.version }}"
           echo "=== artifacts ==="
-          ls -l "$RUNNER_TEMP/releases/${{ steps.ver.outputs.version }}"
+          ls -l "$RUNNER_TEMP/site/releases/${{ steps.ver.outputs.version }}"
 
-      - name: Verify ad-hoc signature (must pass before publish)
+      # 发布前必须复核交付物本身的签名（从 zip 解出再验）
+      - name: Verify ad-hoc signature of shipped zip
         run: |
           set -euo pipefail
-          # 从 zip 解出 .app 复核，确保交付物本身签名有效
           cd "$RUNNER_TEMP"
           rm -rf verify && mkdir verify
-          APP="${{ steps.ver.outputs.version }}"
-          ditto -x -k "releases/$APP/Music Rig-$APP-universal.zip" verify/
-          codesign --verify --deep --strict --verbose=2 "verify/Music Rig.app"
+          V="${{ steps.ver.outputs.version }}"
+          ditto -x -k "site/releases/$V/O Muse-$V-universal.zip" verify/
+          codesign --verify --deep --strict --verbose=2 "verify/O Muse.app"
           echo "signature verification passed"
 
-      # 把 install.sh 与 checksums 放进 latest/ 并一起上传
-      - name: Stage latest install.sh
+      # latest/ 入口：install.sh + VERSION.txt + checksums.txt
+      - name: Stage latest entry points
         run: |
           set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          STAGE="$RUNNER_TEMP/releases"
-          mkdir -p "$STAGE/latest"
-          cp scripts/release/install.sh "$STAGE/latest/install.sh"
-          cp "$STAGE/$VERSION/checksums.txt" "$STAGE/latest/checksums.txt"
+          V="${{ steps.ver.outputs.version }}"
+          SITE="$RUNNER_TEMP/site"
+          mkdir -p "$SITE/releases/latest"
+          cp scripts/release/install.sh        "$SITE/releases/latest/install.sh"
+          cp "$SITE/releases/$V/checksums.txt" "$SITE/releases/latest/checksums.txt"
+          echo "$V" > "$SITE/releases/latest/VERSION.txt"
 
-      - name: Upload to GitHub Releases
+      # 推送到 gh-pages 分支（GitHub Pages 需在仓库设置里开启，指向该分支根目录）
+      - name: Publish to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          TAG="${{ steps.ver.outputs.tag }}"
-          STAGE="$RUNNER_TEMP/releases"
+          cd "$RUNNER_TEMP/site"
+          git init -q
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b gh-pages
+          git add -A
+          git commit -q -m "release: O Muse ${{ steps.ver.outputs.version }} (public beta)"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          echo "published to gh-pages"
 
-          # tag 已存在则先删再建，保证可重复执行（workflow_dispatch 重跑）
-          gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" -y || true
-          gh release create "$TAG" \
-            --title "Music Rig ${VERSION} (public beta)" \
-            --notes "公测版：ad-hoc 签名分发，未经 Apple 公证。安装：curl -fsSL <base>/releases/latest/install.sh | bash" \
-            --generate-notes
-
-          # 版本化产物
-          for f in "$STAGE/$VERSION"/*; do
-            [ -e "$f" ] || continue
-            gh release upload "$TAG" "$f" --clobber
-          done
-          # latest 稳定入口：install.sh + checksums.txt
-          for f in "$STAGE/latest"/*; do
-            [ -e "$f" ] || continue
-            gh release upload "$TAG" "$f" --clobber
-          done
-
-          echo "published:"
-          gh release view "$TAG" --json assets --jq '.assets[].name'
+      - name: Summary
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          {
+            echo "### O Muse ${V} (public beta) 已发布"
+            echo ""
+            echo '```bash'
+            echo "curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

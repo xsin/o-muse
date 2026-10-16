@@ -3,9 +3,9 @@
 // 覆盖：Service Center XML 解析、Kontakt plist 解析、诊断逻辑、命令注册、
 // 以及 Tauri 上下文（tauri.conf.json）可正常加载（打包冒烟前置）。
 
-use music_rig_lib::core::library_manager::diagnose::diagnose;
-use music_rig_lib::core::library_manager::model::{Diagnostic, LibraryEntry};
-use music_rig_lib::core::library_manager::parser::{parse_kontakt_plist, parse_service_center_xml};
+use o_muse_lib::core::library_manager::diagnose::diagnose;
+use o_muse_lib::core::library_manager::model::{Diagnostic, LibraryEntry};
+use o_muse_lib::core::library_manager::parser::{parse_kontakt_plist, parse_service_center_xml};
 
 const SAMPLE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <Applications>

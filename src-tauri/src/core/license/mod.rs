@@ -12,7 +12,7 @@ use tauri_plugin_store::StoreExt;
 
 pub mod dodo;
 
-const STORE_FILE: &str = "music-rig.dat";
+const STORE_FILE: &str = "o-muse.dat";
 const KEY_LICENSE: &str = "license_key";
 const KEY_CACHED_TIER: &str = "cached_tier";
 const KEY_CACHED_AT: &str = "cached_tier_at"; // unix ms
@@ -115,7 +115,7 @@ pub async fn require_pro(app: &AppHandle) -> Result<(), String> {
     if current_tier(app).await.is_pro() {
         Ok(())
     } else {
-        Err("此功能需要 Music Rig Pro 订阅".into())
+        Err("此功能需要 O Muse Pro 订阅".into())
     }
 }
 

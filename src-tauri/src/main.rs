@@ -5,10 +5,10 @@
 //
 // 注意：此前缺少本文件，导致 `cargo build --bins` 无匹配目标、
 // Tauri CLI 无法定位主二进制，`.app` / `.dmg` 打包从 Task 6 起一直失败
-// （"can't open main binary .../music-rig"）。这是真实打包阻断问题。
+// （"can't open main binary .../o-muse"）。这是真实打包阻断问题。
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    music_rig_lib::run();
+    o_muse_lib::run();
 }

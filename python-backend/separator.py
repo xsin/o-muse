@@ -1,7 +1,7 @@
 """真实分轨器（Task 2）。
 
 通过 Demucs 的 Python API 完成音频分轨。若运行环境未安装 Demucs，
-则交由调用方回退到 DemoSeparator。此模块为 Music Rig 独立实现，
+则交由调用方回退到 DemoSeparator。此模块为 O Muse 独立实现，
 仅将 Demucs 作为普通依赖调用，不复制任何第三方源码。
 """
 

@@ -1,11 +1,11 @@
-本产品（Music Rig）自身以 Apache License 2.0 发布。
+本产品（O Muse）自身以 Apache License 2.0 发布。
 
-Copyright 2026 Music Rig. Licensed under the Apache License, Version 2.0.
+Copyright 2026 O Muse. Licensed under the Apache License, Version 2.0.
 完整许可证文本见仓库根目录的 LICENSE 文件。
 
 ─────────────────────────────────────────────────────
 
-本产品（Music Rig）是一个独立的音乐人工具箱。其分轨能力基于
+本产品（O Muse）是一个独立的音乐人工具箱。其分轨能力基于
 Meta 的 Demucs 模型实现，并参考了以下开源项目的设计思路。
 本产品未直接复制任何第三方项目的源代码。
 

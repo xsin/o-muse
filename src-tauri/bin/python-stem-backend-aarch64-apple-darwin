@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Music Rig — 分轨后端 sidecar 启动器（dev 桩）。
+# O Muse — 分轨后端 sidecar 启动器（dev 桩）。
 #
 # 通过 tauri-plugin-shell 的 sidecar 机制被 Rust 端拉起。
 # 本桩脚本直接调用系统 python3 运行 python-backend/main.py；

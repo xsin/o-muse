@@ -3,9 +3,9 @@
 // 全部使用 /tmp 下的模拟目录，**不依赖任何真实插件**（plan 明确禁止）。
 // 性能目标（PRD §5 NFR）：50 个插件首扫 < 2s，缓存命中 < 200ms。
 
-use music_rig_lib::core::plugin_scanner::cache;
-use music_rig_lib::core::plugin_scanner::discover;
-use music_rig_lib::core::plugin_scanner::model::{PluginFormat, PluginInfo, ScanSource};
+use o_muse_lib::core::plugin_scanner::cache;
+use o_muse_lib::core::plugin_scanner::discover;
+use o_muse_lib::core::plugin_scanner::model::{PluginFormat, PluginInfo, ScanSource};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

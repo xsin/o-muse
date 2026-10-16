@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Music Rig 一键安装脚本（公测阶段，ad-hoc 签名分发）
+# O Muse 一键安装脚本（公测阶段，ad-hoc 签名分发）
 #
 # 用法：
 #   快速安装：   curl -fsSL <base>/releases/latest/install.sh | bash
@@ -15,11 +15,11 @@
 # 兼容性：macOS 系统自带 bash 3.2（不使用 mapfile / 关联数组 / ${var^^}）。
 set -euo pipefail
 
-APP_NAME="Music Rig"
+APP_NAME="O Muse"
 # BUNDLE_ID 由 tauri.conf.json 单源管理，此处不重复定义。
 
 # 分发基址：默认 GitHub Releases，可用环境变量覆盖（便于迁移到 CDN）。
-BASE_URL="${MUSIC_RIG_BASE_URL:-https://github.com/musicrig/musicrig/releases/latest/download}"
+BASE_URL="${OMUSE_BASE_URL:-https://xsin.github.io/o-muse/releases/latest}"
 
 # 可被 --version 覆盖
 VERSION="latest"
@@ -37,7 +37,7 @@ ok()   { printf '%s[  ok  ]%s %s\n' "$(printf '\033[1;32m')" "$(printf '\033[0m'
 warn() { printf '%s[ warn ]%s %s\n' "$(printf '\033[1;33m')" "$(printf '\033[0m')" "$*" >&2; }
 die()  { printf '%s[ fail ]%s %s\n' "$(printf '\033[1;31m')" "$(printf '\033[0m')" "$*" >&2; exit 1; }
 
-# 文件名含空格（"Music Rig"），URL 必须编码。
+# 文件名含空格（"O Muse"），URL 必须编码。
 urlencode() {
   python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1"
 }
@@ -79,7 +79,7 @@ cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT INT TERM
 
 # ---- 下载地址 ------------------------------------------------------------
-# 产物按**真实版本号**命名（Music Rig-<version>-<arch>.zip），而 latest 只是
+# 产物按**真实版本号**命名（O Muse-<version>-<arch>.zip），而 latest 只是
 # 一个"指向最新版本"的标签。默认（--version latest）时先从
 # VERSION.txt 解析真实版本号，再按版本号取产物。
 #
@@ -177,11 +177,11 @@ fi
 ACTUAL="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
 if [ -z "$EXPECTED" ]; then
   # 无校验文件时不静默放行：明确告知并要求 --no-verify 显式跳过
-  if [ "${MUSIC_RIG_SKIP_VERIFY:-0}" = "1" ]; then
-    warn "未找到 SHA256 校验文件，已按 MUSIC_RIG_SKIP_VERIFY=1 跳过校验"
+  if [ "${OMUSE_SKIP_VERIFY:-0}" = "1" ]; then
+    warn "未找到 SHA256 校验文件，已按 OMUSE_SKIP_VERIFY=1 跳过校验"
     warn "实际 SHA256：${ACTUAL}"
   else
-    die "未找到 SHA256 校验文件，拒绝安装（可用 MUSIC_RIG_SKIP_VERIFY=1 显式跳过）"
+    die "未找到 SHA256 校验文件，拒绝安装（可用 OMUSE_SKIP_VERIFY=1 显式跳过）"
   fi
 else
   if [ "$EXPECTED" = "$ACTUAL" ]; then

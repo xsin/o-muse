@@ -1,14 +1,14 @@
 # 技术方案：macOS 公测期一键安装分发（不使用 Apple Developer ID）
 
 > 状态：已实现（公测阶段）。
-> 适用范围：Music Rig v0.1.0+，macOS 10.13+。
+> 适用范围：O Muse v0.1.0+，macOS 10.13+。
 > 目标读者：维护者、贡献者，以及需要审计安装脚本的用户。
 
 ---
 
 ## 1. 背景与目标
 
-当前处于**公测反馈收集阶段**：需要让 macOS 用户用一条 `curl` 命令装上能跑的 Music Rig，
+当前处于**公测反馈收集阶段**：需要让 macOS 用户用一条 `curl` 命令装上能跑的 O Muse，
 同时**不购买 Apple Developer Program、不经 App Store、不做公证**。
 
 Apple Developer Program 年费对尚未验证产品市场匹配度的阶段是沉没成本；而不做公证的
@@ -41,7 +41,7 @@ Apple Developer Program 年费对尚未验证产品市场匹配度的阶段是�
 实现本方案时发现：仓库此前**没有 `src-tauri/src/main.rs`**，而 `Cargo.toml` 的
 `[lib]` 只输出 `staticlib`/`cdylib`/`rlib`。后果是 `cargo build --bins` 匹配不到
 任何目标、不产出可执行文件，Tauri CLI 因而报
-`failed to bundle project: can't open main binary .../music-rig`——
+`failed to bundle project: can't open main binary .../o-muse`——
 **`.app` / `.dmg` 从 Task 6 起一直无法产出**。
 
 已按 Tauri 2 标准模式补齐 `main.rs`：
@@ -51,7 +51,7 @@ Apple Developer Program 年费对尚未验证产品市场匹配度的阶段是�
 fn main() { music_rig_lib::run(); }
 ```
 
-补齐后 `tauri build` 正常产出 `Music Rig.app`（含 sidecar）。
+补齐后 `tauri build` 正常产出 `O Muse.app`（含 sidecar）。
 
 ## 3. 当前阶段硬性约束（已落实到实现）
 
@@ -60,7 +60,7 @@ fn main() { music_rig_lib::run(); }
 3. 对 `.app` 使用 ad-hoc 签名：
    - `codesign --force --deep --sign - "<AppName>.app"`
    - 签名后执行 `codesign --verify --deep --strict --verbose=2`
-   - **不依赖 `--deep` 单独覆盖嵌套 bundle**：Music Rig 有一个 sidecar 可执行文件
+   - **不依赖 `--deep` 单独覆盖嵌套 bundle**：O Muse 有一个 sidecar 可执行文件
      （`src-tauri/bin/python-stem-backend`，由 `bundle.externalBin` 注入
      `Contents/MacOS/`），脚本按"从内到外"的顺序先签 sidecar 再签外层 app，
      详见 §5.2。
@@ -79,17 +79,17 @@ releases/
     VERSION.txt           # 当前最新版本号（install.sh 用它把 latest 解析成真实版本）
     checksums.txt         # 最新版校验和（安装脚本优先读这里）
   <version>/
-    Music Rig-<version>-universal.zip
-    Music Rig-<version>-universal.zip.sha256
-    Music Rig-<version>-universal.dmg      # 可选，手动下载用
-    Music Rig-<version>-universal.dmg.sha256
+    O Muse-<version>-universal.zip
+    O Muse-<version>-universal.zip.sha256
+    O Muse-<version>-universal.dmg      # 可选，手动下载用
+    O Muse-<version>-universal.dmg.sha256
     checksums.txt
 ```
 
 约定：
 
 - **支持 universal 包**；若某次构建没有 universal（例如只装了单一 target），
-  则退化为 `arm64` / `x86_64` 分别打包，命名 `Music Rig-<version>-<arch>.zip`。
+  则退化为 `arm64` / `x86_64` 分别打包，命名 `O Muse-<version>-<arch>.zip`。
 - 安装脚本从 `/releases/latest/install.sh` 取脚本，**运行时**再按架构选包。
 - **版本号单一来源**：从 `src-tauri/tauri.conf.json` 的 `version` 读取
   （`scripts/release/lib/version.sh` 封装），不硬编码到多个位置。
@@ -113,7 +113,7 @@ releases/latest/*
 
 ### 4.2 latest 如何解析到真实版本
 
-产物按**真实版本号**命名（`Music Rig-0.1.0-arm64.zip`），`latest` 只是标签。
+产物按**真实版本号**命名（`O Muse-0.1.0-arm64.zip`），`latest` 只是标签。
 安装脚本默认行为：
 
 1. 读 `<base>/latest/VERSION.txt` 得到真实版本号；
@@ -132,10 +132,10 @@ releases/latest/*
 
 ```bash
 # 快速安装
-curl -fsSL https://<domain>/releases/latest/install.sh | bash
+curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash
 
 # 可审计安装（先看再跑）
-curl -fsSL https://<domain>/releases/latest/install.sh -o install.sh
+curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh -o install.sh
 less install.sh
 bash install.sh
 ```
@@ -150,17 +150,17 @@ bash install.sh
 - 下载：`curl -fL --retry 3 --retry-delay 2`
 - **SHA256 校验**：优先读 `checksums.txt`，回退 `<file>.sha256`；失败立即退出
 - 解压：`ditto -x -k`（保留元数据与扩展属性）
-- 退出旧版本：`pkill -x "Music Rig" || true`
+- 退出旧版本：`pkill -x "O Muse" || true`
 - 安装位置：
-  - 默认 `~/Applications/Music Rig.app`（**无需 sudo**）
-  - `--system` → `/Applications/Music Rig.app`（需要 sudo）
+  - 默认 `~/Applications/O Muse.app`（**无需 sudo**）
+  - `--system` → `/Applications/O Muse.app`（需要 sudo）
 - 防御性移除隔离属性：`xattr -dr com.apple.quarantine … || true`
 - `chmod +x` 主可执行；默认 `open` 启动，`--no-launch` 跳过
 - 参数：`--version <v>` / `--install-dir <dir>` / `--no-launch` / `--system`
 - 清晰日志：版本、架构、安装路径、校验结果
-- **覆盖更新不删用户数据**：安装只替换 `.app` bundle；Music Rig 的
+- **覆盖更新不删用户数据**：安装只替换 `.app` bundle；O Muse 的
   用户数据（license key、UI 偏好、插件缓存）位于
-  `~/Library/Application Support/com.musicrig.desktop/`，**不在** bundle 内，
+  `~/Library/Application Support/com.omuse.desktop/`，**不在** bundle 内，
   因此覆盖安装天然不影响数据。
 
 ### 5.3 签名顺序（不只用 `--deep`）
@@ -170,7 +170,7 @@ bash install.sh
 
 1. `Contents/MacOS/python-stem-backend`（sidecar 可执行文件）
 2. 任何 `Contents/Frameworks/*.framework`（当前无）
-3. 外层 `Music Rig.app`
+3. 外层 `O Muse.app`
 
 然后整体 `codesign --verify --deep --strict --verbose=2` 复核。
 
@@ -211,17 +211,26 @@ bash install.sh
 
 ### 6.4 托管与 URL
 
-**主分发**：GitHub Releases（`gh release upload`），附件即 §3 列出的产物。
-`releases/latest/install.sh` 的稳定 URL 由 release 发布流程覆盖上传，
-保证 `curl …/releases/latest/install.sh` 始终是最新逻辑。
+**主分发**：GitHub Pages（`gh-pages` 分支）。CI 把产物写到该分支的
+`releases/` 下，Pages 直接静态服务：
 
-安装脚本的下载基址默认取 GitHub Releases raw URL，并可用
-`MUSIC_RIG_BASE_URL` 覆盖，便于将来迁到自建 CDN / GitHub Pages
-而无需改脚本结构：
+```
+https://xsin.github.io/o-muse/releases/latest/install.sh
+https://xsin.github.io/o-muse/releases/<version>/O Muse-<version>-<arch>.zip
+```
+
+安装脚本默认基址即该 URL，无需任何配置即可 `curl | bash`。
+
+基址可用 `OMUSE_BASE_URL` 覆盖，便于迁到自建 CDN 或 GitHub Releases
+（脚本对 `<version>/` 与 `<version>/download/` 两种布局都会依次尝试，
+故迁移时安装脚本**无需改动**）：
 
 ```bash
-MUSIC_RIG_BASE_URL="https://example.com/releases" bash install.sh
+OMUSE_BASE_URL="https://example.com/releases" bash install.sh
 ```
+
+> 仓库需在 Settings → Pages 中将 Source 设为 `Deploy from a branch` →
+> 分支 `gh-pages`、目录 `/ (root)`。
 
 ---
 
@@ -232,8 +241,8 @@ MUSIC_RIG_BASE_URL="https://example.com/releases" bash install.sh
 2. **客户端只含公开 key，绝不嵌入 secret**：`DODO_API_KEY` /
    `DODO_PRODUCT_ID` 通过**环境变量**注入（`.env`，gitignore），
    客户端二进制不含密钥；`install.sh` / CI 亦不携带任何 Dodo 凭据。
-3. **license 存储位置**：Music Rig 的 license key 存于
-   `tauri-plugin-store`（`music-rig.dat`，位于 Application Support 目录的
+3. **license 存储位置**：O Muse 的 license key 存于
+   `tauri-plugin-store`（`o-muse.dat`，位于 Application Support 目录的
    普通 JSON 文件），**不使用 Keychain**。
    因此 ad-hoc 签名与将来 Developer ID 签名切换时**不会**发生
    Keychain 访问权限重置，**无需迁移逻辑**（§5.4 路径不变）。
@@ -262,7 +271,7 @@ MUSIC_RIG_BASE_URL="https://example.com/releases" bash install.sh
 见 `README.md` 的「安装（公测版）」一节，要点：
 
 ```bash
-curl -fsSL https://<domain>/releases/latest/install.sh | bash
+curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash
 ```
 
 - 当前为公测版，未使用 Apple 开发者签名与公证。
@@ -278,7 +287,7 @@ curl -fsSL https://<domain>/releases/latest/install.sh | bash
 
 | 标准 | 验证方式 |
 |---|---|
-| `curl … install.sh \| bash` 后应用装到 `~/Applications/Music Rig.app` | `bash install.sh --install-dir <tmp>` 干跑 + 真实安装验证 |
+| `curl … install.sh \| bash` 后应用装到 `~/Applications/O Muse.app` | `bash install.sh --install-dir <tmp>` 干跑 + 真实安装验证 |
 | 签名校验通过 | `codesign --verify --deep --strict --verbose=2` |
 | SHA256 校验通过 | 篡改 zip 后安装脚本必须报错退出 |
 | 应用自动启动 | 默认 `open`；`--no-launch` 跳过 |
@@ -314,7 +323,7 @@ bash releases/latest/install.sh --install-dir /tmp/mr-install --no-launch
 2. **universal 包需两个 target**：`aarch64-apple-darwin` 已安装；
    `x86_64-apple-darwin` 需 `rustup target add x86_64-apple-darwin`。
    未安装时构建脚本自动退化为单架构包并如实命名。
-3. **GitHub Pages 域名**：文档中 `<domain>` 为占位符，接入实际托管后替换
-   （脚本支持 `MUSIC_RIG_BASE_URL` 覆盖，无需改逻辑）。
+3. **GitHub Pages 域名**：文档中 域名 `xsin.github.io/o-muse`，接入实际托管后替换
+   （脚本支持 `OMUSE_BASE_URL` 覆盖，无需改逻辑）。
 4. **Rosetta**：x86_64 包在 Apple Silicon 上依赖 Rosetta 2；universal 包无此问题，
    故仍以 universal 为优先。

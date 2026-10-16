@@ -1,8 +1,8 @@
-# Music Rig
+# O Muse
 
 **音乐人的全能工具箱**
 
-Music Rig 是一个跨平台桌面应用（Tauri 2 + React 19），把音乐制作相关的
+O Muse 是一个跨平台桌面应用（Tauri 2 + React 19），把音乐制作相关的
 工具以「App」为单位组织起来。左侧常驻工具箱，可同时打开多个 App 并在
 它们之间切换。所有处理均在本地完成，隐私优先，离线运行。
 
@@ -19,7 +19,7 @@ Music Rig 是一个跨平台桌面应用（Tauri 2 + React 19），把音乐制�
 
 ## 开源归属
 
-Music Rig 为独立实现，**未复制任何第三方项目的源代码**。分轨能力基于
+O Muse 为独立实现，**未复制任何第三方项目的源代码**。分轨能力基于
 Meta 的 [Demucs](https://github.com/facebookresearch/demucs)（MIT），
 实现过程中参考了以下开源项目的设计思路：
 
@@ -31,7 +31,7 @@ Meta 的 [Demucs](https://github.com/facebookresearch/demucs)（MIT），
 完整的参考记录见 [`docs/references.md`](docs/references.md)。第三方许可证
 文本与 NOTICE 归属声明见 [`licenses/`](licenses/)。
 
-> **资金声明**：StemDeck 项目不接受任何资金、赞助或资助。Music Rig 与
+> **资金声明**：StemDeck 项目不接受任何资金、赞助或资助。O Muse 与
 > StemDeck 项目及其作者无官方关联或背书关系。
 
 ## 仓库结构
@@ -62,15 +62,15 @@ Meta 的 [Demucs](https://github.com/facebookresearch/demucs)（MIT），
 推荐一条命令安装：
 
 ```bash
-curl -fsSL https://<domain>/releases/latest/install.sh | bash
+curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash
 ```
 
-默认安装到 `~/Applications/Music Rig.app`（**不需要 sudo**），安装完成后自动启动。
+默认安装到 `~/Applications/O Muse.app`（**不需要 sudo**），安装完成后自动启动。
 
 想先审计脚本再执行（推荐给注重安全的用户）：
 
 ```bash
-curl -fsSL https://<domain>/releases/latest/install.sh -o install.sh
+curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh -o install.sh
 less install.sh
 bash install.sh
 ```
@@ -84,7 +84,7 @@ bash install.sh
 - 如果看到"已损坏"提示，执行：
 
   ```bash
-  xattr -dr com.apple.quarantine ~/Applications/Music\ Rig.app
+  xattr -dr com.apple.quarantine ~/Applications/O\ Muse.app
   ```
 
 **其他参数：**
@@ -98,7 +98,7 @@ bash install.sh
 
 **更新：** 重新运行同一条安装命令即可，会覆盖旧版本并**保留你的数据**
 （license、界面偏好、插件缓存位于
-`~/Library/Application Support/com.musicrig.desktop/`，不在应用包内）。
+`~/Library/Application Support/com.omuse.desktop/`，不在应用包内）。
 
 > 分发与签名的完整技术方案见
 > [`docs/tech-release-without-developer-id.md`](docs/tech-release-without-developer-id.md)。
@@ -118,7 +118,7 @@ bash install.sh
 
 ## 许可证
 
-Music Rig 自身以 **Apache License 2.0** 发布，完整文本见根目录
+O Muse 自身以 **Apache License 2.0** 发布，完整文本见根目录
 [`LICENSE`](LICENSE)。
 
 本项目未直接复制任何第三方源代码，仅在设计层面参考了上述开源项目。

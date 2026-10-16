@@ -1,4 +1,4 @@
-# PRD — Product Requirements Document: Music Rig
+# PRD — Product Requirements Document: O Muse
 
 > 读者：产品与实现团队、Agent 执行者（配合 `brd.md` / `tdd.md`）。
 > 本文件聚焦**做什么**与**体验规格**；商业背景见 `brd.md`，技术约束见 `tdd.md`。
@@ -10,13 +10,13 @@
 ## 2. 术语（锁定）
 
 见 `GLOSSARY.md`：
-- **App**：Music Rig 自身功能单元（可被启动/常驻/多开）。
+- **App**：O Muse 自身功能单元（可被启动/常驻/多开）。
 - **Audio Plugin**：被扫描管理的第三方音频格式（AU/VST/VST3/AAX/CLAP），**不是** App。
 - **工具箱**：v1 首页左栏实际标签；**App Marketplace**：战略愿景名。
 
 ## 3. 用户故事（v1）
 
-- 作为音乐人，我希望打开 Music Rig 看到一个**工具箱**，点开"音频分轨"即可拖入歌曲分离人声/伴奏。
+- 作为音乐人，我希望打开 O Muse 看到一个**工具箱**，点开"音频分轨"即可拖入歌曲分离人声/伴奏。
 - 作为音乐人，我希望在"Kontakt 库管理"里**只读盘点**我的音源库、看到诊断（缺失路径/重复 SNPID/断卷）。
 - 我希望**同时打开**分轨和库管理两个 App，并在左栏切换，不必退出重进。
 - 作为潜在 Pro 用户，我希望输入/激活 license_key 后，Pro 专属能力（写入/修复、自定义目录）被解锁——通过 **Dodo Payments** 校验。
@@ -75,7 +75,7 @@
 
 ### 6.1 布局
 - 两栏栅格：`grid-template-columns: 232px 1fr`（同参考 dashboard）。
-- 左栏：品牌区（logo + "Music Rig"）→ 导航项"**工具箱**"（默认 `on`）→ 已开 App 标签列表（动态追加）→ 底部"设置"。
+- 左栏：品牌区（logo + "O Muse"）→ 导航项"**工具箱**"（默认 `on`）→ 已开 App 标签列表（动态追加）→ 底部"设置"。
 - 右栏：当"工具箱"激活时，显示 App 卡片网格；当某 App 标签激活时，显示该 App 内容面板。
 
 ### 6.2 卡片组件（App Card）

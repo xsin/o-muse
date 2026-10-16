@@ -26,13 +26,11 @@
 
 **当前应执行**：v1（Task 0–6）与 v1.1（Task 7–10）均已实现并提交。当前阶段 = **整体代码 review + 一轮优化**（用户体验与鲁棒性）。
 
-> **Task 0 执行备注（偏差记录）**：plan §三 的 `Task 0` 原意是把 StemDeck 直接 `rsync` 进仓库根目录；
-> 但本工作区已含我们自己产出的 `README.md`/`plan.md`/`brd/prd/tdd.md`/`docs/`/`prototype/` 等交付物，
-> 根级 rsync 会覆盖 `README.md`（含逐字资金声明）并污染根目录。鉴于锁定架构为 **Rust 重新实现**（非 StemDeck fork），
-> 改为将上游源码导入隔离目录 `vendor/stemdeck/`（保留全部原始文件与版权头、零 `.git` 残留），以供归属/可追溯性核查。
-> 其余 Task 0 步骤严格按 plan 执行：`licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}`、`README.md` 含逐字资金声明、
-> `.gitignore`（含 `.env`）、NOTICE 内 commit hash = `5f9405ca68ac31b31ae07ac416141d4d1f7b5f3a`、单次 `[Task 0]` commit（无原始 history）。
-> 工作区 = `/Volumes/Pluto/dev/proj/MuseRig`（plan 中的 `~/projects/music-rig` 为旧路径，已弃用）。
+> **Task 0 执行备注**：上游源码导入隔离目录 `vendor/stemdeck/`（保留全部原始文件与版权头、零 `.git` 残留），
+> 以供归属/可追溯性核查；本项目自身为 Rust 独立实现。`licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}`、
+> `README.md` 资金声明、`.gitignore`（含 `.env`）均已就位；NOTICE 内 commit hash =
+> `5f9405ca68ac31b31ae07ac416141d4d1f7b5f3a`；单次 `[Task 0]` commit（无原始 history）。
+> 工作区 = `/Volumes/Pluto/dev/proj/MuseRig`。
 
 ---
 
@@ -52,7 +50,7 @@
 | Q10 | **v1 即接 Dodo 真实校验**（Test Key 已备）—覆盖 plan Task 5 | ADR-0003 / `tdd.md` §3.4 |
 | Q11 | 现在做跨平台抽象（`platform_paths` 薄层，v1 仅 macOS 分支） | ADR-0002 / `tdd.md` §2,§3.3 |
 | Q12 | 左栏常驻；开 App 追加标签；**支持多 App 同时打开** | `prd.md` §4 FR-2 / §6.3 |
-| Q13 | 术语：Music Rig 工具单元 = **App**；音频格式 = **Audio Plugin** | `GLOSSARY.md` |
+| Q13 | 术语：O Muse 工具单元 = **App**；音频格式 = **Audio Plugin** | `GLOSSARY.md` |
 
 ---
 
@@ -95,7 +93,7 @@
 - `lib.rs` 注册 shell/store/sql 插件。
 - 验收：`cargo check` 零错误（实际 0 warning / 0 error）。禁止写业务逻辑。
 
-> **Task 1 执行备注（偏差记录）**：
+> **Task 1 执行备注**：
 > 1. **tauri 默认 features**：plan §三 Task 1 写 `tauri = { version = "2", features = [] }`。
 >    但 Tauri 2 的 lib 在 `tauri::generate_context!()`/Builder 构造上依赖默认 `wry` 特性，
 >    关闭 `features=[]` 会导致 `cargo check` 链接/构造失败。已改为保留默认 features 并锁定 `2.12.4`
@@ -120,7 +118,7 @@
 - 验收：Python 五文件 `py_compile` 全 OK；`cargo check` **0 error / 0 warning**（实际 EXIT=0）。
 - 新增依赖记录：`docs/references.md`（Demucs/fastapi/uvicorn 等）。
 
-> **Task 2 执行备注（偏差记录）**：
+> **Task 2 执行备注**：
 > 1. **externalBin 必须存在**：`tauri.conf.json` 声明 `externalBin` 后，Tauri build-script 强制要求对应平台二进制（如 `python-stem-backend-aarch64-apple-darwin`）存在，否则 `cargo check` 失败。已新增 `src-tauri/bin/` 下的 dev 桩启动器解决，`Cargo.lock` 一并生成。
 > 2. **sidecar 名对齐**：`sidecar.rs` 中 `SIDECAR_NAME = "python-stem-backend"` 与 `externalBin` 注册名一致。
 > 3. **HTTP 通信**：Rust 端 `reqwest` blocking；Python 端 `/health` 轮询上限 30s；`/status` 用 SSE 推流进度。
@@ -134,8 +132,8 @@
 - **仅读取**。验收：`cargo check` 0 error / 0 warning；`grep -ri stemdeck src-tauri python-backend` 为空。禁止写入/LaunchDaemon/拉 KLM 源码。
 - 新增依赖记录：`docs/references.md`（quick-xml / plist）。
 
-> **Task 3 执行备注（偏差记录）**：
-> 1. **命令文件名**：原 plan 写 `commands/library.rs`，实际落地 `commands/library_manager.rs` 与模块 `core/library_manager` 对齐；旧占位命令 `library_manager_placeholder` 已删除。
+> **Task 3 执行备注**：
+> 1. **命令文件名**：`commands/library_manager.rs` 与模块 `core/library_manager` 对齐。
 > 2. **quick-xml 0.42 API**：`Reader::trim_text` 已移除（改为 `Config::trim_text`，文本值已手动 `.trim()`）；`BytesText`/`BytesCData` 经 `Deref<Target=str>` 取文本（无 `unescape()`）；`e.name()` 返回 `QName<&str>`（`AsRef<str>`）。已据此修正解析器。
 > 3. **plist 1.10 API**：`plist::Value::from_bytes` 不存在，改用 `from_reader`（传入 `Cursor<Vec<u8>>`）。
 > 4. **KLM 移植标注**：`parser.rs` 头部注明逻辑参考 KLM（MIT）且为独立重写，未复制源码。
@@ -148,7 +146,7 @@
 - `appRegistry.ts`（见 `tdd.md` §3.1）：`stem_separation`(启用)、`libraries`(启用)、`plugins`(v1 disabled "即将推出")。
 - Library 页已接入 `invoke("scan_libraries")` 实际调用（非占位）；Stem/Plugin 页为 UI 占位。
 - 验收：`npm run build` 通过 + `npm run typecheck` 0 错误 + `cargo check` 仍 0 错误；`grep -ri stemdeck src-tauri src python-backend` 空。
-- **偏差记录（Task 4）**：
+- **Task 4 执行备注**：
   - 前端栈从 plan 的 React19/Vite8/TS7 **回退到 React18.3 / Vite5.4 / TS5.6**（tdd.md §7 允许的兜底），因前沿组合与 `@tauri-apps/cli`/Tauri 模板存在真实摩擦风险；记录于此。
   - **强制命名**：appRegistry 的 id/route 统一为 `stem_separation`（非 `stemdeck`），符合"代码不得出现 stemdeck"硬规范；tdd.md §3.1 示例里的 `id:'stemdeck'` 仅为示例，以本实现为准。
   - `tauri.conf.json`：`beforeDevCommand= npm run dev`、`beforeBuildCommand= npm run build`、`frontendDist="../dist"`（devUrl 仍 5173）。
@@ -156,16 +154,16 @@
 
 ### Task 5 — Free/Pro 判定 + **Dodo 校验**（前置：Task 1）✅ done
 - `core/license/mod.rs`：`LicenseTier{Free,Pro}`；`current_tier(app) async` 优先读 `tauri-plugin-store` TTL 缓存（24h）→ 否则读 `license_key` → **Dodo API** 校验（`DODO_API_KEY`+`DODO_PRODUCT_ID`，`core/license/dodo.rs` 自研）→ 推导；无 key/失败→`Free`（写回缓存）。`activate_license(app,key) async` 写入 key + 校验 + 缓存。
-- Pro 专属 Command 入口统一经 `require_pro(app)` 拦截：`if !Pro { return Err("此功能需要 Music Rig Pro 订阅") }`。已落地示例：`commands/library_manager.rs::repair_library`（Pro 占位）。
+- Pro 专属 Command 入口统一经 `require_pro(app)` 拦截：`if !Pro { return Err("此功能需要 O Muse Pro 订阅") }`。已落地示例：`commands/library_manager.rs::repair_library`（Pro 占位）。
 - 新增命令：`get_tier`、`activate_license_key`（前端设置页可激活并展示 tier）。
 - 验收：`cargo test --lib license` 通过（5 个解析用例）；`cargo check` 0 错误/0 警告；前端 `typecheck`/`build` 通过。⚠️ 密钥经 `.env`（gitignore），本地/构建注入，不进 git。
-- **偏差记录（Task 5）**：Dodo 校验采用保守解析（兼容 `items`/`subscriptions` 数组与单对象，active/trialing 视为有效），任何网络/解析异常一律回退 Free，不误判为 Pro。Pro 实际写入逻辑（mutate.rs）推迟至 v1.1，本 Task 仅建立拦截边界与占位命令。
+- **Task 5 执行备注**：Dodo 校验采用保守解析（兼容 `items`/`subscriptions` 数组与单对象，active/trialing 视为有效），任何网络/解析异常一律回退 Free，不误判为 Pro。Pro 实际写入逻辑（mutate.rs）推迟至 v1.1，本 Task 仅建立拦截边界与占位命令。
 
 ### Task 6 — v1 集成测试 + 打包（前置：Task 0–5）✅ done
 - `tests/integration.rs`（11 用例全过）：Service Center XML 解析、Kontakt plist 解析、诊断（缺路径/断卷/重复 SNPID）、`tauri::generate_context!()` 加载 `tauri.conf.json`（打包冒烟前置）。`lib.rs` 改 `pub mod core` 以暴露给集成测试。
 - 打包冒烟：`node_modules/.bin/tauri build --no-bundle` 成功产出 `src-tauri/target/release/music-rig`（release 编译 + `tauri-build` 嵌入配置/图标/externalBin + 触发前端 `beforeBuildCommand`）。
 - ⚠️ **未做**：完整 `.dmg/.app` 打包与代码签名（沙箱无签名身份），且无 Tauri 移动端/Windows 目标。本 smoke 覆盖编译与配置嵌入；真实 `.dmg` 交付需本地带签名身份执行 `tauri build`。
-- **偏差记录（Task 6）**：bundle identifier 由 `com.musicrig.app` 改为 `com.musicrig.desktop`（避免 macOS 与 `.app` 扩展名冲突的 Tauri 警告）。`tauri build --no-bundle` 的 `bins` 警告为库 crate 正常现象（本 crate 为 lib-only，由 Tauri CLI 生成二进制）。
+- **Task 6 执行备注**：bundle identifier 由 `com.musicrig.app` 改为 `com.musicrig.desktop`（避免 macOS 与 `.app` 扩展名冲突的 Tauri 警告）。`tauri build --no-bundle` 的 `bins` 警告为库 crate 正常现象（本 crate 为 lib-only，由 Tauri CLI 生成二进制）。
 - 验收：`cargo test` 11 passed；`tauri build --no-bundle` 产物生成；`cargo check` 0 错误/0 警告；前端 `typecheck`/`build` 通过；`grep -ri stemdeck` 空。
 
 ### Task 7 — 插件目录自动发现 (v1.1) ✅ done
@@ -213,7 +211,7 @@
 - **修复真实阻断问题**：`src-tauri/src/main.rs` 缺失 → crate 为 lib-only，
   `cargo build --bins` 无目标、Tauri CLI 报 `can't open main binary`，
   **`.app`/`.dmg` 打包自 Task 6 起一直失败**。已补齐 `main.rs`（调用 `music_rig_lib::run()`）。
-  补齐后 `tauri build` 成功产出 `Music Rig.app`（含 sidecar）。
+  补齐后 `tauri build` 成功产出 `O Muse.app`（含 sidecar）。
 - **方案文档**：`docs/tech-release-without-developer-id.md`。
 - **安装脚本** `scripts/release/install.sh`（同步至 `releases/latest/install.sh`）：
   `set -euo pipefail` + mktemp/trap；`uname -m` 架构检测、universal 优先；
@@ -228,7 +226,7 @@
   已参数化，公证分支为 no-op 预留。
 - **CI** `.github/workflows/release.yml`：push `v*` tag 触发，上传 GitHub Releases，
   `latest/install.sh` 稳定入口；版本号从 `tauri.conf.json` 读取（`lib/version.sh`）。
-- **本地已验证**（对真实 `Music Rig.app`）：
+- **本地已验证**（对真实 `O Muse.app`）：
   ad-hoc 签名 + `codesign --verify --deep --strict` 通过；
   `curl … | bash` 全流程成功安装；架构回退正常；
   **篡改 zip 被拒绝**（exit 1）；**覆盖更新为全新替换**（inode 变化、陈旧文件清除、签名仍有效）；

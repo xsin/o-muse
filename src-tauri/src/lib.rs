@@ -1,4 +1,4 @@
-// Music Rig — Rust 后端入口（Tauri 2）
+// O Muse — Rust 后端入口（Tauri 2）
 //
 // Task 2：引入 Python sidecar（FastAPI 分轨服务）的生命周期管理。
 // 守护进程句柄存于 `SidecarState`，由命令层共享。
@@ -39,5 +39,5 @@ pub fn run() {
             commands::license::activate_license_key,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Music Rig");
+        .expect("error while running O Muse");
 }

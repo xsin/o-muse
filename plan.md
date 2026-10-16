@@ -1,4 +1,4 @@
-# Music Rig — AI Agent 完整技术执行方案 v1.0
+# O Muse — AI Agent 完整技术执行方案 v1.0
 
 **目标读者**：AI Agent（Claude Code / Cursor / Windsurf / Codex）
 **执行模式**：逐任务执行，每完成一个 Task 后运行指定验证命令，验证通过再进入下一 Task。
@@ -9,7 +9,7 @@
 
 ### 1.1 产品定位
 
-**Music Rig** 是一款面向音乐人的本地桌面助手，定位为**音乐人必备的瑞士军刀 / 全能工具箱**。v1 首发两个核心工具：**音频分轨**（基于 StemDeck）与 **Kontakt 音色库管理**（参考 KLM 逻辑），v1.1 扩展**音频插件（AU/VST/VST3/AAX/CLAP）扫描与管理**。品牌层不绑定任何单一功能，未来可持续扩展音乐创作小工具。
+**O Muse** 是一款面向音乐人的本地桌面助手，定位为**音乐人必备的瑞士军刀 / 全能工具箱**。v1 首发两个核心工具：**音频分轨**（基于 StemDeck）与 **Kontakt 音色库管理**（参考 KLM 逻辑），v1.1 扩展**音频插件（AU/VST/VST3/AAX/CLAP）扫描与管理**。品牌层不绑定任何单一功能，未来可持续扩展音乐创作小工具。
 
 ### 1.2 商业模式
 
@@ -17,13 +17,13 @@ Free + Pro 订阅制。Free 版保留开源核心功能，Pro 版通过独立闭
 
 ### 1.3 品牌与模块结构
 
-品牌名 **Music Rig**，子模块采用 `Music Rig / <工具名>` 结构：
+品牌名 **O Muse**，子模块采用 `O Muse / <工具名>` 结构：
 
 ```
-Music Rig / Separate      ← 分轨（v1）
-Music Rig / Libraries     ← Kontakt 库管理（v1）
-Music Rig / Plugins       ← 插件管理（v1.1）
-Music Rig / <未来工具>     ← 持续扩展
+O Muse / Separate      ← 分轨（v1）
+O Muse / Libraries     ← Kontakt 库管理（v1）
+O Muse / Plugins       ← 插件管理（v1.1）
+O Muse / <未来工具>     ← 持续扩展
 ```
 
 ### 1.4 技术栈决策（可升级为最新版）
@@ -166,7 +166,7 @@ cp /tmp/stemdeck-src/LICENSE licenses/APACHE-2.0.txt 2>/dev/null || \
 创建 `licenses/NOTICE`，内容如下：
 
 ```
-本产品（Music Rig）包含来自以下开源项目的代码或逻辑：
+本产品（O Muse）包含来自以下开源项目的代码或逻辑：
 
 ─────────────────────────────────────────────────────
 项目一：StemDeck
@@ -197,7 +197,7 @@ cp /tmp/stemdeck-src/LICENSE licenses/APACHE-2.0.txt 2>/dev/null || \
 创建 `README.md`，顶部必须包含以下声明（**逐字照抄，不得改写**）：
 
 ```markdown
-# Music Rig
+# O Muse
 
 > **开源归属声明**
 >
@@ -216,7 +216,7 @@ cp /tmp/stemdeck-src/LICENSE licenses/APACHE-2.0.txt 2>/dev/null || \
 ```bash
 # 创建 .gitignore（至少包含 .git/modules、node_modules、target、dist、*.pyc）
 git add -A
-git commit -m "[Task 0] 初始化 Music Rig 仓库：拉取 StemDeck 源码，配置许可证合规文件"
+git commit -m "[Task 0] 初始化 O Muse 仓库：拉取 StemDeck 源码，配置许可证合规文件"
 ```
 
 **验证命令**:
@@ -390,7 +390,7 @@ pub async fn scan_libraries() -> Result<Vec<LibraryEntry>, String>
    - `StemDeckPage`：文件拖放区域 + 分轨进度条 + 多轨波形占位
    - `LibraryManagerPage`：库存表格 + 搜索框 + 诊断标记列
    - `PluginManagerPage`：v1 中仅显示"即将推出"占位
-4. 创建顶部导航栏，三个页面之间可切换。品牌名统一显示为 **Music Rig**，导航栏使用 `Music Rig / Separate`、`Music Rig / Libraries`、`Music Rig / Plugins` 结构。
+4. 创建顶部导航栏，三个页面之间可切换。品牌名统一显示为 **O Muse**，导航栏使用 `O Muse / Separate`、`O Muse / Libraries`、`O Muse / Plugins` 结构。
 5. 在 `src/stores/` 中创建 Zustand store（或 React Context），管理全局状态。
 
 **验证命令**: `npm run build`
@@ -426,7 +426,7 @@ pub fn current_tier() -> LicenseTier {
 
 ```rust
 if license::current_tier() != LicenseTier::Pro {
-    return Err("此功能需要 Music Rig Pro 订阅".into());
+    return Err("此功能需要 O Muse Pro 订阅".into());
 }
 ```
 
@@ -452,13 +452,13 @@ if license::current_tier() != LicenseTier::Pro {
    - 调用 `scan_libraries()` 命令，验证不 panic
    - 验证 Free tier 下 Pro 命令被拒绝
 2. 运行 `cargo test`。
-3. 在 `tauri.conf.json` 中设置 `productName: "Music Rig"`。
+3. 在 `tauri.conf.json` 中设置 `productName: "O Muse"`。
 4. 构建 Tauri 应用：`npm run tauri build`。
-5. 验证生成的 `.dmg` 或 `.app` 可启动，应用名为 Music Rig。
+5. 验证生成的 `.dmg` 或 `.app` 可启动，应用名为 O Muse。
 
 **验证命令**: `cargo test && npm run tauri build`
 
-**通过标准**: 所有测试通过；构建产物生成且名称为 Music Rig。
+**通过标准**: 所有测试通过；构建产物生成且名称为 O Muse。
 
 **禁止事项**: 不要在 CI 配置中引入需要网络访问的步骤（除非使用 GitHub Actions 的缓存）。
 
@@ -670,21 +670,21 @@ Agent 在每个 Task 完成后必须确认：
 
 ## 七、品牌层补充说明
 
-**产品名**：Music Rig
-**子模块命名**：`Music Rig / Separate`、`Music Rig / Libraries`、`Music Rig / Plugins`
-**Pro 版本命名**：Music Rig Pro
+**产品名**：O Muse
+**子模块命名**：`O Muse / Separate`、`O Muse / Libraries`、`O Muse / Plugins`
+**Pro 版本命名**：O Muse Pro
 
 **商标与域名核查（人工执行，非 Agent 任务）**：
 
-1. 到 USPTO TESS（类别 9 / 42）、中国商标网、EUIPO 查询 "Music Rig"
+1. 到 USPTO TESS（类别 9 / 42）、中国商标网、EUIPO 查询 "O Muse"
 2. 查询 `musicrig.app`、`musicrig.com`、`musicrig.audio` 域名可用性
-3. 在 App Store / Google Play / GitHub / npm 搜索 "Music Rig"、"MusicRig"，确认无同名活跃产品
+3. 在 App Store / Google Play / GitHub / npm 搜索 "O Muse"、"MusicRig"，确认无同名活跃产品
 4. 由于 "Music" 是通用词、组合词注册性较好，但仍需确认无在先注册
 
 **品牌传播要求**：
 
-- 所有对外文案统一使用 "Music Rig"
-- `tauri.conf.json` 中 `productName: "Music Rig"`，`identifier: "app.musicrig.desktop"`（或你最终确定的域名反写）
+- 所有对外文案统一使用 "O Muse"
+- `tauri.conf.json` 中 `productName: "O Muse"`，`identifier: "app.musicrig.desktop"`（或你最终确定的域名反写）
 - 应用图标、启动画面、关于页面统一品牌
 
 

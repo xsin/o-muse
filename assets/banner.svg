@@ -72,7 +72,7 @@
   <text x="440" y="260"
         font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
         font-size="94" font-weight="700" letter-spacing="-2"
-        fill="url(#textGrad)">Music Rig</text>
+        fill="url(#textGrad)">O Muse</text>
 
   <!-- 副标题 -->
   <text x="443" y="312"
