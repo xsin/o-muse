@@ -2,13 +2,20 @@
 //
 // Kontakt 库管理核心：合并四个注册来源盘点、磁盘扫描、注册/注销与 `.nicnt` 生成。
 //
-// 权限边界（硬约束）：本模块**绝不提权**，不调用 `sudo` / `osascript`，
-// 也不使用 `std::process::Command`。`/Library` 下的来源一律只读，
-// 因此「补全系统级注册」这件事会被诊断为 `UnprivilegedWriteRequired` 交由用户决定。
+// 权限边界：
+//   - 免提权路径（installed_products JSON + 用户级 plist）依旧是默认行为，
+//     `add_library` / `remove_library` **不提权**、不用 `std::process::Command`；
+//   - `/Library` 下的两个来源默认只读，读取不需要提权；
+//   - 「补全系统级注册」需要写 `/Library`，**只**经 `privileged` 模块的一次性助手完成：
+//     由 `osascript … with administrator privileges` 取得用户显式授权，
+//     且必须先用 `kontakt_privilege_plan` 把「具体文件 + 原因」告知用户。
+//     授权前不会有任何写入；`osascript` 之外不启动其他外部进程
+//     （外部进程一律经 `tauri_plugin_shell`）。
 
 pub mod diagnose;
 pub mod model;
 pub mod nicnt;
+pub mod privileged;
 pub mod registry;
 pub mod scan;
 
@@ -18,6 +25,9 @@ pub use model::{
 };
 pub use nicnt::{
     build_container, find_metadata_file, parse_metadata_file, parse_nicnt_bytes, write_nicnt,
+};
+pub use privileged::{
+    helper_entry, run_privileged, PrivilegedOp, PrivilegedRequest, CANCELLED_MARKER,
 };
 pub use scan::{directory_size, scan_libraries};
 

@@ -145,7 +145,7 @@ pub enum IssueCode {
     DuplicateSnpid,
     /// 同一内容路径被多个库引用（大小写不敏感）。
     DuplicatePath,
-    /// 补全注册需要写入 `/Library`，需管理员权限；本应用不会提权。
+    /// 补全注册需要写入 `/Library`，需管理员授权；应用会先列出具体文件与原因再由用户确认。
     UnprivilegedWriteRequired,
 }
 

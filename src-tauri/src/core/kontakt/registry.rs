@@ -10,7 +10,9 @@
 // | 用户级 plist | `~/Library/Preferences/com.native-instruments.<RegKey>.plist` | 可写（用户所有） |
 //
 // 三条铁律：
-//  1. 绝不提权：只以当前用户权限读写，`/Library` 下的来源一律只读。
+//  1. 本模块自身只以当前用户权限读写：`/Library` 下的来源在此**只读**。
+//     需要写入 `/Library` 时由 `privileged` 模块在用户明确授权后、以一次性助手完成
+//     （见 docs/adr/0005-privileged-operations.md）。
 //  2. 只动注册文件：绝不删除或移动磁盘上的库内容。
 //  3. 写前备份、失败回滚、原子写、逐级拒绝符号链接。
 
@@ -493,6 +495,116 @@ fn temp_sibling(path: &Path) -> PathBuf {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     parent.join(format!(".{name}.omuse-{}-{nanos}.tmp", std::process::id()))
+}
+
+// ── 系统级写入（提权助手专用）────────────────────────────────
+//
+// 以下函数会写入 `/Library`（root:admin / root:wheel），**只允许在已经提权的
+// 助手进程中调用**（见 `core::kontakt::privileged`）。路径白名单校验由
+// privileged 模块负责；这里只做防御性的符号链接检查、原子写入与权限设置。
+//
+// 既有函数的行为不因本节改动：`write_registrations` / `remove_registration`
+// 依旧只碰用户可写来源。
+
+/// 以 root 身份原子写入系统级注册文件，落盘权限 0644；父目录不存在时创建（0755）。
+pub fn write_system_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("无法确定父目录: {}", path.display()))?;
+    // 逐级检查符号链接：父目录与目标本身都不允许是链接。
+    ensure_no_symlink(parent)?;
+    ensure_no_symlink(path)?;
+
+    if !parent.exists() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("创建系统目录 {} 失败: {e}", parent.display()))?;
+        set_permissions(parent, 0o755)?;
+    }
+
+    atomic_write(path, bytes)?;
+    // `atomic_write` 经 `File::create` 建临时文件，权限受 umask 影响；显式设为 0644。
+    set_permissions(path, 0o644)
+}
+
+/// 以 root 身份删除系统级注册文件（文件本就不存在时视为成功）。
+pub fn remove_system_file(path: &Path) -> Result<(), String> {
+    ensure_no_symlink(path)?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("删除 {} 失败: {e}", path.display())),
+    }
+}
+
+/// 设置权限位（Unix）；同时用于创建目录/文件后的 umask 兜底。
+pub fn set_permissions(path: &Path, mode: u32) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let permissions = fs::Permissions::from_mode(mode);
+    fs::set_permissions(path, permissions)
+        .map_err(|e| format!("设置 {} 权限为 0o{mode:o} 失败: {e}", path.display()))
+}
+
+/// 生成系统级 plist（`/Library/Preferences/com.native-instruments.<RegKey>.plist`）的字节内容。
+///
+/// 字段名与 `read_system_plist_at` 的读取约定一一对应，保证写出去的文件能被自己读回。
+/// `ContentDir` 采用可逆的 NI 路径写法：外接卷写成 `<卷名>:目录:…`（与
+/// `normalize_content_dir` 的 HFS→POSIX 规则互逆），其余卷写 POSIX 绝对路径。
+pub fn system_plist_bytes(registration: &SystemRegistration) -> Result<Vec<u8>, String> {
+    super::nicnt::validate_component(&registration.reg_key, "RegKey")?;
+    super::nicnt::validate_component(&registration.name, "Name")?;
+    if registration.snpid.trim().is_empty() {
+        return Err("SNPID 为空，拒绝生成系统 plist".to_string());
+    }
+
+    let mut dict = Dictionary::new();
+    dict.insert(
+        "RegKey".to_string(),
+        Value::String(registration.reg_key.clone()),
+    );
+    dict.insert("SNPID".to_string(), Value::String(registration.snpid.clone()));
+    dict.insert("Name".to_string(), Value::String(registration.name.clone()));
+    if let Some(dir) = registration.content_dir.as_deref() {
+        dict.insert(
+            "ContentDir".to_string(),
+            Value::String(ni_content_dir_string(dir)),
+        );
+    }
+    dict.insert(
+        "Visibility".to_string(),
+        Value::Integer(registration.visibility.unwrap_or(3).into()),
+    );
+    for (key, value) in [
+        ("HU", registration.hu.as_deref()),
+        ("JDX", registration.jdx.as_deref()),
+        ("UPID", registration.upid.as_deref()),
+        ("AuthSystem", registration.auth_system.as_deref()),
+    ] {
+        if let Some(value) = value.filter(|v| !v.trim().is_empty()) {
+            dict.insert(key.to_string(), Value::String(value.trim().to_string()));
+        }
+    }
+
+    let mut buf = Vec::new();
+    plist::to_writer_xml(&mut buf, &Value::Dictionary(dict))
+        .map_err(|e| format!("序列化系统 plist 失败: {e}"))?;
+    Ok(buf)
+}
+
+/// POSIX 内容路径 → NI 记录的路径写法（`normalize_content_dir` 的逆运算）。
+///
+/// `/Volumes/<卷名>/a/b` → `<卷名>:a:b`（读回时再补回 `/Volumes/`）。
+/// 非外接卷路径原样返回 POSIX 形式——本应用无法可靠得知启动卷的卷名，
+/// 因此不臆造 `<启动卷>:…` 形式的 HFS 路径。
+fn ni_content_dir_string(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix("/Volumes/") {
+        if let Some((volume, tail)) = rest.split_once('/') {
+            if !volume.is_empty() && !tail.is_empty() {
+                return format!("{volume}:{}", tail.replace('/', ":"));
+            }
+        }
+    }
+    text.to_string()
 }
 
 // ── JSON 字节级补丁 ───────────────────────────────────────────

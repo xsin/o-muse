@@ -125,7 +125,7 @@ pub fn issues_for(library: &KontaktLibrary) -> Vec<Issue> {
             Severity::Warning,
             IssueCode::UnprivilegedWriteRequired,
             format!(
-                "缺少{}；该来源位于 /Library，需管理员权限；本应用不会提权",
+                "缺少{}；该来源位于 /Library，需管理员授权后写入（应用会先列出具体文件与原因）",
                 missing.join("、")
             ),
         ));

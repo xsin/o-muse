@@ -29,6 +29,8 @@ pub fn run() {
             commands::kontakt::kontakt_remove,
             commands::kontakt::kontakt_nicnt_spec,
             commands::kontakt::kontakt_create_nicnt,
+            commands::kontakt::kontakt_privilege_plan,
+            commands::kontakt::kontakt_apply_privileged,
             commands::stem_separation::separate,
             commands::stem_separation::stem_status,
             commands::stem_separation::stem_results,

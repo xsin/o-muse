@@ -106,7 +106,7 @@ o-muse/
 ```
 
 **全局禁止**：
-- 不要运行 `sudo`、`su` 或任何提权命令
+- 默认不要运行 `sudo`、`su` 或任何提权命令；**例外**：功能确实需要提权时（见 `docs/adr/0005-privileged-operations.md`），必须向用户逐条列出具体操作对象（完整路径）与原因，限定在白名单路径内，并以一次性助手执行、不安装常驻服务
 - 不要调用 `powershell`、`bash -c "..."` 执行外部命令
 - 不要在 Rust 代码中使用 `std::process::Command` 启动非 Sidecar 进程（Python sidecar 除外）
 - 不要修改 `licenses/` 目录下的任何文件

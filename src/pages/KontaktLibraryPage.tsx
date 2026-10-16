@@ -4,11 +4,12 @@
 // 以及为缺少 .nicnt 的库生成识别文件的能力。
 //
 // 数据来源（macOS）：
-//   - 系统 Service Center XML      /Library/Application Support/...  （只读，写需管理员）
-//   - 系统 plist                   /Library/Preferences/...          （只读，写需管理员）
+//   - 系统 Service Center XML      /Library/Application Support/...  （写需管理员授权）
+//   - 系统 plist                   /Library/Preferences/...          （写需管理员授权）
 //   - installed_products JSON      /Users/Shared/...                 （可写）
 //   - 用户级 plist                 ~/Library/Preferences/...         （可写）
-// 本应用不做提权：仅能写入后两者，需要管理员的来源会明确告知用户。
+// 免提权部分（后两者）先完成；系统级来源缺什么由 `kontakt_privilege_plan`
+// **逐条列出具体路径与原因**，用户确认后经系统管理员密码框写入，绝不静默提权。
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -69,6 +70,19 @@ interface NicntFormSpec {
 
 type SortKey = "name" | "snpid" | "size";
 
+/** 提权计划里的一条：具体文件 + 动作 + 原因（reason 为 i18n key 的回退文案）。 */
+interface PrivilegeEntry {
+  path: string;
+  action: "write" | "remove";
+  reason: string;
+  reason_key: string;
+}
+
+interface PrivilegePlan {
+  needed: boolean;
+  entries: PrivilegeEntry[];
+}
+
 export default function KontaktLibraryPage() {
   const { t } = useTranslation();
   const [libs, setLibs] = useState<KontaktLibrary[]>([]);
@@ -81,6 +95,9 @@ export default function KontaktLibraryPage() {
   const [sortAsc, setSortAsc] = useState(true);
   const [pendingRemove, setPendingRemove] = useState<KontaktLibrary | null>(null);
   const [nicntFor, setNicntFor] = useState<KontaktLibrary | null>(null);
+  const [privPlan, setPrivPlan] = useState<PrivilegePlan | null>(null);
+  const [privTarget, setPrivTarget] = useState<{ regKey: string; name: string } | null>(null);
+  const [privBusy, setPrivBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,6 +146,64 @@ export default function KontaktLibraryPage() {
     }
   };
 
+  /**
+   * 询问系统级（/Library）注册是否需要提权写入。
+   *
+   * 只做查询：`needed` 为真时把**每一条具体路径 + 原因**展示给用户，
+   * 由用户点「继续」后才会触发管理员授权。
+   */
+  const askPrivilege = async (regKey: string, name: string) => {
+    try {
+      const plan = await invoke<PrivilegePlan>("kontakt_privilege_plan", { regKey, name });
+      if (plan.needed && plan.entries.length > 0) {
+        setPrivTarget({ regKey, name });
+        setPrivPlan(plan);
+      }
+    } catch (e) {
+      // 计划失败不阻断已经完成的免提权部分，但要如实告知。
+      setError(String(e));
+    }
+  };
+
+  const closePrivilege = () => {
+    setPrivPlan(null);
+    setPrivTarget(null);
+  };
+
+  /**
+   * 用户对提权计划的决定。
+   *
+   * `allow === false` 表示用户跳过：直接收起对话框，不做任何提权动作
+   * （免提权部分此前已经写好了）。
+   */
+  const decidePrivilege = async (allow: boolean) => {
+    const target = privTarget;
+    if (!allow || !target) {
+      closePrivilege();
+      return;
+    }
+    setPrivBusy(true);
+    setError(null);
+    try {
+      const applied = await invoke<string[]>("kontakt_apply_privileged", {
+        regKey: target.regKey,
+        name: target.name,
+        allow: true,
+      });
+      setNotice(t("kontakt.priv.applied", { n: applied.length }));
+      closePrivilege();
+      await load();
+    } catch (e) {
+      const message = String(e);
+      // 用户取消管理员授权不是失败：友好提示，不显示红字。
+      if (message.includes("已取消")) setNotice(t("kontakt.priv.cancelled"));
+      else setError(message);
+      closePrivilege();
+    } finally {
+      setPrivBusy(false);
+    }
+  };
+
   /** 选择 .nicnt 文件并注册该库。 */
   const addLibrary = async () => {
     setError(null);
@@ -143,6 +218,7 @@ export default function KontaktLibraryPage() {
       const lib = await invoke<KontaktLibrary>("kontakt_add", { nicntPath: picked });
       setNotice(t("kontakt.added", { name: lib.name }));
       await load();
+      await askPrivilege(lib.reg_key, lib.name);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -159,6 +235,7 @@ export default function KontaktLibraryPage() {
       await invoke("kontakt_remove", { regKey: lib.reg_key, name: lib.name });
       setNotice(t("kontakt.removed"));
       await load();
+      await askPrivilege(lib.reg_key, lib.name);
     } catch (e) {
       setError(String(e));
     }
@@ -356,6 +433,55 @@ export default function KontaktLibraryPage() {
                 <Button variant="danger" onPress={doRemove}>
                   {t("common.confirm")}
                 </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal.Root>
+
+      {/* 系统级注册（/Library）需要管理员授权：逐条列出具体文件与原因后才继续 */}
+      <Modal.Root
+        isOpen={!!privPlan}
+        onOpenChange={(o) => {
+          if (!o && !privBusy) closePrivilege();
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{t("kontakt.priv.title")}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm">
+                  {t("kontakt.priv.intro", { name: privTarget?.name ?? "" })}
+                </p>
+                <ul className="mt-3 flex flex-col gap-3">
+                  {(privPlan?.entries ?? []).map((entry) => (
+                    <li key={`${entry.action}-${entry.path}`} className="flex flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge color={entry.action === "write" ? "accent" : "danger"}>
+                          {entry.action === "write"
+                            ? t("kontakt.priv.actionWrite")
+                            : t("kontakt.priv.actionRemove")}
+                        </Badge>
+                        <code className="break-all text-xs">{entry.path}</code>
+                      </div>
+                      <p className="text-xs opacity-70">
+                        {t(entry.reason_key, { defaultValue: entry.reason })}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-xs opacity-80">{t("kontakt.priv.notice")}</p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="ghost" onPress={() => decidePrivilege(false)} isDisabled={privBusy}>
+                  {t("kontakt.priv.decline")}
+                </Button>
+                <PrimaryButton onPress={() => decidePrivilege(true)} isDisabled={privBusy}>
+                  {t("kontakt.priv.continue")}
+                </PrimaryButton>
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

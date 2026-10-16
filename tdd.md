@@ -233,7 +233,7 @@ htdemucs 权重 `955717e8-8726e21a.th` 也按固定 SHA256 校验。
 - `README.md` 含"上游参考项目不接受资金支持"声明；`git log` 无上游参考项目原始 commit。
 
 ## 6. 全局禁止（plan §二）
-- 不运行 `sudo`/`su`/提权；不调用 `powershell`、`bash -c` 执行外部命令。
+- 默认不运行 `sudo`/`su`/提权命令；**例外**：功能确实需要提权时（见 `docs/adr/0005-privileged-operations.md`），必须①向用户逐条列出具体操作对象（完整路径）与原因，②限定在白名单路径内，③以一次性助手执行、不安装常驻服务。仍不调用 `powershell`、`bash -c` 执行外部命令。
 - Rust 中不得用 `std::process::Command` 启动非 Sidecar 进程（Python sidecar 除外）。
 - 不修改 `licenses/`；Pro 模块不引用 Apache-2.0 原始文件；不恢复上游参考项目 Git 历史。
 
