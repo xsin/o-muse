@@ -170,13 +170,24 @@ sign_nested() {
     echo "[sign]   嵌套 app: $(basename "$nested")"
     codesign "${SIGN_ARGS[@]}" "$nested"
   done
-  # 3) 可执行文件（含 sidecar 注入的 python-stem-backend）
+  # 3) 可执行文件。顺序很重要：codesign 在签**主可执行文件**时会校验整个
+  #    bundle，若此时 sidecar 等附属可执行文件仍是未签名状态，就会报
+  #    "code object is not signed at all / In subcomponent"，导致签名失败。
+  #    因此先从 Info.plist 读出 CFBundleExecutable，先签其余、**主程序最后签**，
+  #    不能依赖字母序（"o-muse" 恰好排在 "python-stem-backend" 之前）。
   if [ -d "$target/Contents/MacOS" ]; then
+    MAIN_EXE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \
+      "$target/Contents/Info.plist" 2>/dev/null || true)"
     for exe in "$target/Contents/MacOS"/*; do
       [ -f "$exe" ] || continue
+      [ "$(basename "$exe")" = "$MAIN_EXE_NAME" ] && continue
       echo "[sign]   executable: $(basename "$exe")"
       codesign "${SIGN_ARGS[@]}" "$exe"
     done
+    if [ -n "$MAIN_EXE_NAME" ] && [ -f "$target/Contents/MacOS/$MAIN_EXE_NAME" ]; then
+      echo "[sign]   main executable（最后签）: $MAIN_EXE_NAME"
+      codesign "${SIGN_ARGS[@]}" "$target/Contents/MacOS/$MAIN_EXE_NAME"
+    fi
   fi
   # 4) 外层 bundle 本体
   echo "[sign] bundle: $(basename "$target")"
@@ -247,7 +258,18 @@ TARGZ_NAME="${APP_NAME}-${VERSION}-${ARCH_LABEL}.app.tar.gz"
 TARGZ_PATH="$OUT_DIR/$TARGZ_NAME"
 echo "[pack] tar.gz → ${TARGZ_NAME}"
 rm -f "$TARGZ_PATH"
-COPYFILE_DISABLE=1 tar -czf "$TARGZ_PATH" -C "$(dirname "$APP_SRC")" "$(basename "$APP_SRC")"
+# --mac-metadata（bsdtar）：保留扩展属性等 macOS 元数据。
+# 侧车 python-stem-backend 是**脚本**，其 codesign 签名存放在 xattr 中，
+# 不保留就会在解压后丢失、导致整个 bundle 签名校验失败。
+# 注意：客户端用的 Rust tar crate 只认 SCHILY.xattr.* 前缀，与 bsdtar 的
+# LIBARCHIVE.xattr.* 不一致，故客户端仍会在解压后**重新签名**兜底
+# （见 core/updater 与 tdd-auto-update.md）。此处保留仍有益无害。
+if tar --help 2>&1 | grep -q -- "--mac-metadata" || tar --mac-metadata -cf /dev/null --files-from /dev/null 2>/dev/null; then
+  COPYFILE_DISABLE=1 tar --mac-metadata -czf "$TARGZ_PATH" -C "$(dirname "$APP_SRC")" "$(basename "$APP_SRC")"
+else
+  echo "[pack] 警告：tar 不支持 --mac-metadata（非 bsdtar），xattr 不会被保留；客户端会重新签名兜底" >&2
+  COPYFILE_DISABLE=1 tar -czf "$TARGZ_PATH" -C "$(dirname "$APP_SRC")" "$(basename "$APP_SRC")"
+fi
 ( cd "$OUT_DIR" && shasum -a 256 "$TARGZ_NAME" > "$TARGZ_NAME.sha256" )
 TARGZ_SHA="$(awk '{print $1}' "$TARGZ_PATH.sha256")"
 echo "[pack] tar.gz SHA256: ${TARGZ_SHA}"

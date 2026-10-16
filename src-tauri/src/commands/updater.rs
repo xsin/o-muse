@@ -77,10 +77,17 @@ pub async fn update_install(app: tauri::AppHandle) -> Result<UpdateInfo, String>
             .app_data_dir()
             .map_err(|e| format!("获取应用数据目录失败: {e}"))?;
 
-        upd::download_and_stage(&app_data, &info, &asset, move |p| {
+        let staged = upd::download_and_stage(&app_data, &info, &asset, move |p| {
             use tauri::Emitter;
             let _ = emit_handle.emit(upd::PROGRESS_EVENT, p);
         })?;
+
+        // 解压后**重新做 ad-hoc 签名**并校验。
+        // 原因：侧车 python-stem-backend 是脚本，其 codesign 签名存放在扩展属性中；
+        // tar 往返（bsdtar 写 LIBARCHIVE.xattr.*，Rust tar crate 只认 SCHILY.xattr.*）
+        // 会导致该签名丢失，进而整个 bundle 签名校验失败。
+        // 重新签名是幂等且确定性的，可保证安装后的 bundle 有效。
+        resign_bundle(&handle, &staged)?;
 
         // 体积：下载完成后取实际大小，供前端展示
         let staged_dir = upd::version_dir(&app_data, &info.version);
@@ -153,5 +160,69 @@ pub async fn app_exit(app: tauri::AppHandle) -> Result<(), String> {
     })
     .await
     .map_err(|e| format!("退出应用失败: {e}"))?;
+    Ok(())
+}
+
+/// 对暂存的 `.app` 重新做 ad-hoc 签名，并校验签名有效。
+///
+/// 必须成功：签名无效的 bundle 在 macOS 上可能无法启动，
+/// 因此这里失败即中止更新，而不是冒险替换。
+fn resign_bundle(app: &tauri::AppHandle, bundle: &std::path::Path) -> Result<(), String> {
+    use tauri_plugin_shell::ShellExt;
+
+    let run = |args: Vec<String>| -> Result<(bool, String), String> {
+        let out = tauri::async_runtime::block_on(
+            app.shell()
+                .command("/usr/bin/codesign")
+                .args(args)
+                .output(),
+        )
+        .map_err(|e| format!("调用 codesign 失败: {e}"))?;
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        Ok((out.status.success(), err))
+    };
+
+    let bundle_s = bundle.to_string_lossy().to_string();
+
+    // 由内到外：先签可执行文件，再签 bundle 本体。
+    // --deep 在新版 macOS 上不可靠，故显式逐个签。
+    let macos_dir = bundle.join("Contents").join("MacOS");
+    if let Ok(rd) = std::fs::read_dir(&macos_dir) {
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if !p.is_file() {
+                continue;
+            }
+            let (ok, err) = run(vec![
+                "--force".into(),
+                "--sign".into(),
+                "-".into(),
+                p.to_string_lossy().to_string(),
+            ])?;
+            if !ok {
+                return Err(format!("签名 {} 失败：{err}", p.display()));
+            }
+        }
+    }
+
+    let (ok, err) = run(vec![
+        "--force".into(),
+        "--sign".into(),
+        "-".into(),
+        bundle_s.clone(),
+    ])?;
+    if !ok {
+        return Err(format!("签名更新包失败：{err}"));
+    }
+
+    let (ok, err) = run(vec![
+        "--verify".into(),
+        "--deep".into(),
+        "--strict".into(),
+        bundle_s,
+    ])?;
+    if !ok {
+        return Err(format!("更新包签名校验未通过，已中止安装：{err}"));
+    }
     Ok(())
 }

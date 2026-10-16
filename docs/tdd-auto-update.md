@@ -182,6 +182,31 @@ idle ──检查──▶ checking ──有新版──▶ available ──更
                   └──无/失败──▶ idle     └──稍后──▶ dismissed(本次会话)
 ```
 
+## 5.1 签名在 tar 往返中的丢失（实测踩到的坑）
+
+**现象**：`tar.gz` 解压后 `codesign --verify --deep --strict` 失败：
+`code object is not signed at all / In subcomponent: .../python-stem-backend`。
+
+**原因**：侧车 `python-stem-backend` 是**脚本**（非 Mach-O），它的 codesign 签名
+存放在**扩展属性**（`com.apple.cs.CodeSignature` 等）而非文件内容里。
+tar 默认不携带扩展属性 → 解压后签名丢失 → 整个 bundle 校验失败。
+（主可执行文件 `o-muse` 是 Mach-O，签名嵌入文件内，不受影响。）
+
+**双重处理**：
+
+1. 打包侧：`tar --mac-metadata`（bsdtar）保留扩展属性。
+   实测：解压后 `codesign --verify --deep --strict` **通过**；体积仅增加约 1.5KB。
+2. 客户端侧：**解压后重新做 ad-hoc 签名**（`resign_bundle`）。
+   之所以不依赖第 1 条，是因为 Rust 的 `tar` crate 只识别 `SCHILY.xattr.*` 前缀，
+   而 macOS bsdtar 写的是 `LIBARCHIVE.xattr.*`，**前缀不匹配，`set_unpack_xattrs(true)` 实际不生效**。
+   重新签名是幂等且确定性的，能可靠恢复有效签名。
+
+`resign_bundle` 的约束：由内到外先签 `Contents/MacOS` 下各可执行文件、
+再签 bundle 本体；随后必须 `codesign --verify --deep --strict` 通过，
+**不通过则中止更新**（签名无效的 bundle 可能无法启动，宁可保留旧版本）。
+
+> 注意：`--deep` 在新版 macOS 上不可靠，故显式逐个签名而非只依赖 `--deep`。
+
 ## 6. 关键行为
 
 ### 启动检查的时机

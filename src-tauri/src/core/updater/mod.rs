@@ -400,6 +400,11 @@ pub fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<(), String> {
     let gz = flate2::read::GzDecoder::new(f);
     let mut ar = tar::Archive::new(gz);
     ar.set_preserve_permissions(true);
+    // 尝试恢复扩展属性。注意：Rust 的 tar crate 只识别 `SCHILY.xattr.*`，
+    // 而 macOS bsdtar 写的是 `LIBARCHIVE.xattr.*`，故这里**通常不会生效**；
+    // 侧车脚本的 codesign 签名因此可能丢失，由调用方在解压后重新签名兜底
+    // （见 commands/updater.rs 的 resign_bundle）。
+    ar.set_unpack_xattrs(true);
     std::fs::create_dir_all(dest).map_err(|e| format!("创建解压目录失败: {e}"))?;
     ar.unpack(dest).map_err(|e| format!("解压更新包失败: {e}"))?;
     Ok(())
