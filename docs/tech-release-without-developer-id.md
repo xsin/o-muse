@@ -32,11 +32,28 @@ Apple Developer Program 年费对尚未验证产品市场匹配度的阶段是�
 | Developer ID 签名 + 公证 | 完整 Gatekeeper 放行（**当前不采用**） |
 
 所以 ad-hoc 签名是当前阶段**唯一可行**选项，且它保留了将来切换到真实签名的能力
-——签名身份是可配置的（`SIGN_IDENTITY`，见 §5.3）。
+——签名身份是可配置的（`SIGN_IDENTITY`，见 §6.3）。
 
 ---
 
-## 2. 当前阶段硬性约束（已落实到实现）
+## 2. 前置修复：缺失的二进制入口（打包阻断）
+
+实现本方案时发现：仓库此前**没有 `src-tauri/src/main.rs`**，而 `Cargo.toml` 的
+`[lib]` 只输出 `staticlib`/`cdylib`/`rlib`。后果是 `cargo build --bins` 匹配不到
+任何目标、不产出可执行文件，Tauri CLI 因而报
+`failed to bundle project: can't open main binary .../music-rig`——
+**`.app` / `.dmg` 从 Task 6 起一直无法产出**。
+
+已按 Tauri 2 标准模式补齐 `main.rs`：
+
+```rust
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+fn main() { music_rig_lib::run(); }
+```
+
+补齐后 `tauri build` 正常产出 `Music Rig.app`（含 sidecar）。
+
+## 3. 当前阶段硬性约束（已落实到实现）
 
 1. 不使用 App Store；`tauri.conf.json` 无任何 App Store 配置。
 2. 不使用 Developer ID 证书，不做公证。
@@ -46,19 +63,20 @@ Apple Developer Program 年费对尚未验证产品市场匹配度的阶段是�
    - **不依赖 `--deep` 单独覆盖嵌套 bundle**：Music Rig 有一个 sidecar 可执行文件
      （`src-tauri/bin/python-stem-backend`，由 `bundle.externalBin` 注入
      `Contents/MacOS/`），脚本按"从内到外"的顺序先签 sidecar 再签外层 app，
-     详见 §4.2。
+     详见 §5.2。
 4. 主分发格式：`.zip`，用 `ditto -c -k --keepParent` 打包（保留 macOS 元数据/扩展属性）。
 5. 可选同时产出 `.dmg` 供手动下载，但**文档主推 curl 安装**。
 6. 托管在 GitHub Releases（见 §5.4）。
 
 ---
 
-## 3. 目录与产物结构
+## 4. 目录与产物结构
 
 ```text
 releases/
   latest/
-    install.sh            # 稳定 URL，指向最新版逻辑
+    install.sh            # 稳定 URL，指向最新版逻辑（纳入 git，可审计）
+    VERSION.txt           # 当前最新版本号（install.sh 用它把 latest 解析成真实版本）
     checksums.txt         # 最新版校验和（安装脚本优先读这里）
   <version>/
     Music Rig-<version>-universal.zip
@@ -77,20 +95,40 @@ releases/
   （`scripts/release/lib/version.sh` 封装），不硬编码到多个位置。
 - SHA256 校验文件：每个产物一份 `<file>.sha256`，外加一份汇总 `checksums.txt`。
 
-### 3.1 关于 `releases/` 是否入库
+### 4.1 关于 `releases/` 是否入库
 
-`releases/` **不提交到 git**（`.gitignore` 已加）。真实产物由 CI 上传到
-GitHub Releases；本地 `scripts/release/build.sh` 生成的产物仅用于验证与预览。
-GitHub Pages 方案见 §5.4。
+二进制产物（zip/dmg/checksums）**不入库**（`.gitignore` 排除），真实产物由 CI
+上传 GitHub Releases。但 **`releases/latest/install.sh` 纳入版本控制**：
+它需要被用户 `less` 审计，且要能从一个稳定路径取到，因此单独开白名单：
+
+```
+releases/*
+!releases/latest/
+releases/latest/*
+!releases/latest/install.sh
+```
+
+`VERSION.txt` 不入库——它在每次发布时由 `build.sh` 生成，来源仍是
+`tauri.conf.json` 的 `version`。
+
+### 4.2 latest 如何解析到真实版本
+
+产物按**真实版本号**命名（`Music Rig-0.1.0-arm64.zip`），`latest` 只是标签。
+安装脚本默认行为：
+
+1. 读 `<base>/latest/VERSION.txt` 得到真实版本号；
+2. 按 `<base>/<version>/<file>` 与 `<base>/<version>/download/<file>`
+   **两种布局依次尝试**（前者适配自建/Pages，后者适配 GitHub Releases）；
+3. 取不到 `VERSION.txt` 时回退为 `latest-<arch>.zip` 命名。
 
 ---
 
-## 4. 安装脚本 `install.sh`
+## 5. 安装脚本 `install.sh`
 
 交付物：`releases/latest/install.sh`（由 `scripts/release/install.sh` 同步生成）。
 要求逐条对应实现：
 
-### 4.1 两种用法
+### 5.1 两种用法
 
 ```bash
 # 快速安装
@@ -104,7 +142,7 @@ bash install.sh
 
 脚本被设计为**可直接通过管道执行**（不依赖调用方传入 `$0` 或参数文件）。
 
-### 4.2 安全与健壮性
+### 5.2 安全与健壮性
 
 - `set -euo pipefail`
 - 临时目录 `mktemp -d`，退出时 `trap` 清理
@@ -125,7 +163,7 @@ bash install.sh
   `~/Library/Application Support/com.musicrig.desktop/`，**不在** bundle 内，
   因此覆盖安装天然不影响数据。
 
-### 4.3 签名顺序（不只用 `--deep`）
+### 5.3 签名顺序（不只用 `--deep`）
 
 `--deep` 对含嵌套可执行代码的 bundle 在新版 macOS 上已不可靠。构建脚本按
 **由内到外**顺序单独签名：
@@ -144,21 +182,21 @@ bash install.sh
 
 ---
 
-## 5. 构建与 CI
+## 6. 构建与 CI
 
-### 5.1 本地/CI 构建脚本
+### 6.1 本地/CI 构建脚本
 
 - `scripts/release/lib/version.sh`：从 `tauri.conf.json` 读版本号
 - `scripts/release/build.sh`：构建 → ad-hoc 签名 → 验证 → zip → sha256 → 归档
 - `scripts/release/install.sh`：安装脚本本体（被拷贝到 `releases/latest/`）
 - `.github/workflows/release.yml`：push tag 触发，产物上传 GitHub Releases
 
-### 5.2 版本号来源
+### 6.2 版本号来源
 
 `version.sh` 从 `src-tauri/tauri.conf.json` 的 `version` 字段读取，构建与
 `install.sh` 的 `--version` 参数都以它为唯一来源，避免多处硬编码。
 
-### 5.3 未来签名/公证预留环境变量
+### 6.3 未来签名/公证预留环境变量
 
 | 变量 | 当前值 | 将来 |
 |---|---|---|
@@ -171,7 +209,7 @@ bash install.sh
 `build.sh` 已读取这些变量：`SIGN_IDENTITY` 决定 `codesign --sign` 的签名身份；
 `NOTARIZE=1` 时才执行 `notarytool submit` / `stapler staple`（当前为 no-op 分支）。
 
-### 5.4 托管与 URL
+### 6.4 托管与 URL
 
 **主分发**：GitHub Releases（`gh release upload`），附件即 §3 列出的产物。
 `releases/latest/install.sh` 的稳定 URL 由 release 发布流程覆盖上传，
@@ -187,7 +225,7 @@ MUSIC_RIG_BASE_URL="https://example.com/releases" bash install.sh
 
 ---
 
-## 6. Dodo Payment 注意事项
+## 7. Dodo Payment 注意事项
 
 1. **分发方式不影响支付/授权逻辑**：Dodo 校验仍走
    `core/license/dodo.rs`（HTTP 校验 + TTL 缓存），本次改动未触碰该逻辑。
@@ -204,7 +242,7 @@ MUSIC_RIG_BASE_URL="https://example.com/releases" bash install.sh
 
 ---
 
-## 7. 未来切换到 Developer ID
+## 8. 未来切换到 Developer ID
 
 拿到 Developer ID 后仅需：
 
@@ -219,7 +257,7 @@ MUSIC_RIG_BASE_URL="https://example.com/releases" bash install.sh
 
 ---
 
-## 8. 用户安装说明（README 片段）
+## 9. 用户安装说明（README 片段）
 
 见 `README.md` 的「安装（公测版）」一节，要点：
 
@@ -236,7 +274,7 @@ curl -fsSL https://<domain>/releases/latest/install.sh | bash
 
 ---
 
-## 9. 验收标准与验证方式
+## 10. 验收标准与验证方式
 
 | 标准 | 验证方式 |
 |---|---|
@@ -249,9 +287,9 @@ curl -fsSL https://<domain>/releases/latest/install.sh | bash
 | Dodo 授权流程正常 | 复用现有 `license` 模块，未改动 |
 | 将来只改 `SIGN_IDENTITY` + 公证，不重写脚本 | 环境变量已参数化，公证分支已预留 |
 
-本地可复现的验证命令见 §9.1。
+本地可复现的验证命令见 §10.1。
 
-### 9.1 本地验证（不购买 Developer ID）
+### 10.1 本地验证（不购买 Developer ID）
 
 ```bash
 # 1) 打 universal 或单架构包
@@ -268,7 +306,7 @@ bash releases/latest/install.sh --install-dir /tmp/mr-install --no-launch
 
 ---
 
-## 10. 已知限制
+## 11. 已知限制
 
 1. **ad-hoc 签名无身份**：`spctl -a -vv` 对 ad-hoc 应用会返回
    "rejected (the code is not signed at all)" 之类的评估失败——这是**预期**的，
