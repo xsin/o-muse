@@ -83,6 +83,95 @@ interface PrivilegePlan {
   entries: PrivilegeEntry[];
 }
 
+// ── 后端字段规整 ─────────────────────────────────────────────
+//
+// 页面只在**数据入口**做一次规整，之后渲染层拿到的永远是完整结构。
+// 目的：`issues` / `sources` 缺失、`name` 为 null、`content_size_bytes` 变成
+// 字符串等后端形状变化，都只会让某个格子显示默认值，而不会让整页白屏。
+
+function asString(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v == null) return "";
+  return String(v);
+}
+
+function asBool(v: unknown): boolean {
+  return v === true;
+}
+
+function asNumberOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** 严重级别做成大小写无关：后端改用 "warning"/"WARNING" 也不会错色或崩。 */
+function asSeverity(v: unknown): Issue["severity"] {
+  switch (asString(v).toLowerCase()) {
+    case "error":
+      return "Error";
+    case "warning":
+      return "Warning";
+    default:
+      return "Info";
+  }
+}
+
+function normalizeIssue(raw: unknown): Issue | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const code = asString(r.code);
+  if (!code) return null;
+  return { severity: asSeverity(r.severity), code, detail: asString(r.detail) };
+}
+
+/** 一条后端记录 → 前端结构；必要字段全缺时返回 null（该条丢弃，不影响其余条目）。 */
+function normalizeLibrary(raw: unknown): KontaktLibrary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const sources = (r.sources && typeof r.sources === "object" ? r.sources : {}) as Record<
+    string,
+    unknown
+  >;
+  const name = asString(r.name);
+  const regKey = asString(r.reg_key) || name;
+  if (!name && !regKey) return null;
+  return {
+    name,
+    reg_key: regKey,
+    snpid: asString(r.snpid),
+    content_path: typeof r.content_path === "string" && r.content_path ? r.content_path : null,
+    visibility: asNumberOrNull(r.visibility),
+    sources: {
+      has_service_center: asBool(sources.has_service_center),
+      has_system_plist: asBool(sources.has_system_plist),
+      has_user_plist: asBool(sources.has_user_plist),
+      has_installed_product_json: asBool(sources.has_installed_product_json),
+    },
+    issues: (Array.isArray(r.issues) ? r.issues : [])
+      .map(normalizeIssue)
+      .filter((i): i is Issue => i !== null),
+    user_list_index: asNumberOrNull(r.user_list_index),
+    content_size_bytes: asNumberOrNull(r.content_size_bytes),
+  };
+}
+
+function normalizeLibraries(raw: unknown): KontaktLibrary[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normalizeLibrary).filter((l): l is KontaktLibrary => l !== null);
+}
+
+/**
+ * 底层错误是否与「文件访问权限」有关。
+ *
+ * macOS 上 Kontakt 音色库常在 ~/Downloads、~/Documents、外置卷里，
+ * 首次读取会触发 TCC 授权；用户点「不允许」后错误信息五花八门，
+ * 这里统一识别，好给出可操作的指引而不是一句「失败」。
+ */
+function isPermissionError(message: string): boolean {
+  return /权限|permission|denied|not permitted|Operation not permitted|EPERM|EACCES|未能读取任何/i.test(
+    message,
+  );
+}
+
 export default function KontaktLibraryPage() {
   const { t } = useTranslation();
   const [libs, setLibs] = useState<KontaktLibrary[]>([]);
@@ -103,8 +192,10 @@ export default function KontaktLibraryPage() {
     setLoading(true);
     setError(null);
     try {
-      setLibs((await invoke<KontaktLibrary[]>("kontakt_inventory")) ?? []);
+      // 后端返回什么形状都先规整：字段缺失按空数组/false 处理。
+      setLibs(normalizeLibraries(await invoke<KontaktLibrary[]>("kontakt_inventory")));
     } catch (e) {
+      setLibs([]);
       setError(String(e));
     } finally {
       setLoading(false);
@@ -127,7 +218,7 @@ export default function KontaktLibraryPage() {
     if (!picked || Array.isArray(picked)) return;
     setBusy(true);
     try {
-      const found = await invoke<KontaktLibrary[]>("kontakt_scan", { root: picked });
+      const found = normalizeLibraries(await invoke<KontaktLibrary[]>("kontakt_scan", { root: picked }));
       if (found.length === 0) {
         setNotice(t("kontakt.empty"));
       } else {
@@ -232,7 +323,11 @@ export default function KontaktLibraryPage() {
     if (typeof picked !== "string") return;
     setBusy(true);
     try {
-      const lib = await invoke<KontaktLibrary>("kontakt_add", { nicntPath: picked });
+      const lib = normalizeLibrary(await invoke<KontaktLibrary>("kontakt_add", { nicntPath: picked }));
+      if (!lib) {
+        setError(t("kontakt.error.badResponse"));
+        return;
+      }
       setNotice(t("kontakt.added", { name: lib.name }));
       await load();
       await askPrivilege(lib.reg_key, lib.name);
@@ -268,22 +363,20 @@ export default function KontaktLibraryPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = libs.filter(
-      (l) =>
-        !q ||
-        l.name.toLowerCase().includes(q) ||
-        l.snpid.toLowerCase().includes(q) ||
-        l.reg_key.toLowerCase().includes(q),
-    );
+    const list = libs.filter((l) => {
+      if (!q) return true;
+      // 逐字段兜底：任何一个是 null/undefined 都不该让筛选抛异常。
+      return [l.name, l.snpid, l.reg_key].some((v) => asString(v).toLowerCase().includes(q));
+    });
     const dir = sortAsc ? 1 : -1;
     return [...list].sort((a, b) => {
       if (sortKey === "size") {
         return ((a.content_size_bytes ?? 0) - (b.content_size_bytes ?? 0)) * dir;
       }
       if (sortKey === "snpid") {
-        return a.snpid.localeCompare(b.snpid) * dir;
+        return asString(a.snpid).localeCompare(asString(b.snpid)) * dir;
       }
-      return a.name.localeCompare(b.name) * dir;
+      return asString(a.name).localeCompare(asString(b.name)) * dir;
     });
   }, [libs, query, sortKey, sortAsc]);
 
@@ -331,103 +424,130 @@ export default function KontaktLibraryPage() {
       </SearchField.Root>
 
       {loading && <Loading label={t("kontakt.scanning")} />}
-      {error && <ErrorText>{error}</ErrorText>}
+      {error && (
+        <div className="flex flex-col items-start gap-2 rounded border border-danger/40 p-3">
+          <ErrorText>{error}</ErrorText>
+          {/* TCC 被拒 / 目录不可读时给出可操作的下一步，而不是只说“失败”。 */}
+          {isPermissionError(error) && (
+            <p className="text-sm opacity-80">{t("kontakt.permission.hint")}</p>
+          )}
+          <Button size="sm" variant="secondary" onPress={load} isDisabled={loading}>
+            {t("kontakt.retry")}
+          </Button>
+        </div>
+      )}
       {notice && <OkText>{notice}</OkText>}
 
       {!loading && filtered.length === 0 && !error && <Empty>{t("kontakt.empty")}</Empty>}
 
       {filtered.length > 0 && (
         <Section>
-          <Table>
-            <Table.Header>
-              <Table.Column isRowHeader>
-                <SortHeader
-                  label={t("kontakt.cols.name")}
-                  active={sortKey === "name"}
-                  asc={sortAsc}
-                  onPress={() => toggleSort("name")}
-                />
-              </Table.Column>
-              <Table.Column>
-                <SortHeader
-                  label={t("kontakt.cols.snpid")}
-                  active={sortKey === "snpid"}
-                  asc={sortAsc}
-                  onPress={() => toggleSort("snpid")}
-                />
-              </Table.Column>
-              <Table.Column>
-                <SortHeader
-                  label={t("kontakt.cols.size")}
-                  active={sortKey === "size"}
-                  asc={sortAsc}
-                  onPress={() => toggleSort("size")}
-                />
-              </Table.Column>
-              <Table.Column>{t("kontakt.cols.path")}</Table.Column>
-              <Table.Column>{t("kontakt.cols.status")}</Table.Column>
-              <Table.Column>{t("kontakt.cols.actions")}</Table.Column>
-            </Table.Header>
-            <Table.Body>
-              {filtered.map((l) => (
-                <Table.Row key={`${l.reg_key}-${l.snpid}`}>
-                  <Table.Cell>{l.name}</Table.Cell>
-                  <Table.Cell>
-                    <code className="text-xs">{l.snpid || "—"}</code>
-                  </Table.Cell>
-                  <Table.Cell>{formatBytes(l.content_size_bytes)}</Table.Cell>
-                  <Table.Cell className="max-w-xs">
-                    <span className="text-xs opacity-70" title={l.content_path ?? ""}>
-                      {l.content_path ? displayPath(l.content_path) : "—"}
-                    </span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex flex-wrap gap-1">
-                      {isRegistered(l) ? (
-                        <Badge color="success">{t("kontakt.registered")}</Badge>
-                      ) : (
-                        <Badge>{t("kontakt.diskOnly")}</Badge>
-                      )}
-                      {l.issues.slice(0, 2).map((i) => (
-                        <Badge
-                          key={i.code}
-                          color={
-                            i.severity === "Error"
-                              ? "danger"
-                              : i.severity === "Warning"
-                                ? "warning"
-                                : "default"
-                          }
-                        >
-                          {t(`kontakt.issue.${i.code}`, { defaultValue: i.code })}
-                        </Badge>
-                      ))}
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex gap-1">
-                      {!hasNicnt(l) && (
-                        <Button size="sm" variant="secondary" onPress={() => setNicntFor(l)}>
-                          {t("kontakt.createNicnt")}
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onPress={() => l.content_path && reveal(l.content_path)}
-                        isDisabled={!l.content_path}
-                      >
-                        {t("kontakt.openInFinder")}
-                      </Button>
-                      <DangerButton onPress={() => setPendingRemove(l)}>
-                        {t("kontakt.remove")}
-                      </DangerButton>
-                    </div>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
+          {/* 注意：HeroUI 3 里 `Table`（= Table.Root）只是个 div 外壳，
+              真正提供集合上下文的是 `Table.Content`。
+              Header/Body/Column/Row/Cell 必须放在 Table.Content 之内，
+              否则 react-aria 会抛 "cannot be rendered outside a collection."
+              ——这正是「有数据才白屏、库为 0 时正常」的原因。 */}
+          <Table.Root>
+            <Table.ScrollContainer>
+              <Table.Content aria-label={t("kontakt.title")}>
+                <Table.Header>
+                  <Table.Column key="name" id="name" isRowHeader>
+                    <SortHeader
+                      label={t("kontakt.cols.name")}
+                      active={sortKey === "name"}
+                      asc={sortAsc}
+                      onPress={() => toggleSort("name")}
+                    />
+                  </Table.Column>
+                  <Table.Column key="snpid" id="snpid">
+                    <SortHeader
+                      label={t("kontakt.cols.snpid")}
+                      active={sortKey === "snpid"}
+                      asc={sortAsc}
+                      onPress={() => toggleSort("snpid")}
+                    />
+                  </Table.Column>
+                  <Table.Column key="size" id="size">
+                    <SortHeader
+                      label={t("kontakt.cols.size")}
+                      active={sortKey === "size"}
+                      asc={sortAsc}
+                      onPress={() => toggleSort("size")}
+                    />
+                  </Table.Column>
+                  <Table.Column key="path" id="path">
+                    {t("kontakt.cols.path")}
+                  </Table.Column>
+                  <Table.Column key="status" id="status">
+                    {t("kontakt.cols.status")}
+                  </Table.Column>
+                  <Table.Column key="actions" id="actions">
+                    {t("kontakt.cols.actions")}
+                  </Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {filtered.map((l, index) => (
+                    <Table.Row key={`${l.reg_key}-${l.snpid}-${index}`} id={`${l.reg_key}-${l.snpid}-${index}`}>
+                      <Table.Cell>{l.name || "—"}</Table.Cell>
+                      <Table.Cell>
+                        <code className="text-xs">{l.snpid || "—"}</code>
+                      </Table.Cell>
+                      <Table.Cell>{formatBytes(l.content_size_bytes)}</Table.Cell>
+                      <Table.Cell className="max-w-xs">
+                        <span className="text-xs opacity-70" title={l.content_path ?? ""}>
+                          {l.content_path ? displayPath(l.content_path) : "—"}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex flex-wrap gap-1">
+                          {isRegistered(l) ? (
+                            <Badge color="success">{t("kontakt.registered")}</Badge>
+                          ) : (
+                            <Badge>{t("kontakt.diskOnly")}</Badge>
+                          )}
+                          {(l.issues ?? []).slice(0, 2).map((i) => (
+                            <span key={i.code} title={i.detail || undefined}>
+                              <Badge
+                                color={
+                                  i.severity === "Error"
+                                    ? "danger"
+                                    : i.severity === "Warning"
+                                      ? "warning"
+                                      : "default"
+                                }
+                              >
+                                {t(`kontakt.issue.${i.code}`, { defaultValue: i.code })}
+                              </Badge>
+                            </span>
+                          ))}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex gap-1">
+                          {!hasNicnt(l) && (
+                            <Button size="sm" variant="secondary" onPress={() => setNicntFor(l)}>
+                              {t("kontakt.createNicnt")}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onPress={() => l.content_path && reveal(l.content_path)}
+                            isDisabled={!l.content_path}
+                          >
+                            {t("kontakt.openInFinder")}
+                          </Button>
+                          <DangerButton onPress={() => setPendingRemove(l)}>
+                            {t("kontakt.remove")}
+                          </DangerButton>
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table.Root>
         </Section>
       )}
 
@@ -554,18 +674,21 @@ function samePlan(a: PrivilegePlan | null, b: PrivilegePlan | null): boolean {
   return fingerprint(a) === fingerprint(b);
 }
 
+/** 有任一来源记录即视为「已注册」；`sources` 缺失时按未注册处理。 */
 function isRegistered(l: KontaktLibrary): boolean {
+  const s = l.sources;
   return (
-    l.sources.has_service_center ||
-    l.sources.has_system_plist ||
-    l.sources.has_user_plist ||
-    l.sources.has_installed_product_json
+    asBool(s?.has_service_center) ||
+    asBool(s?.has_system_plist) ||
+    asBool(s?.has_user_plist) ||
+    asBool(s?.has_installed_product_json)
   );
 }
 
 /** 无任何来源表明存在 .nicnt 时，提示可创建。 */
 function hasNicnt(l: KontaktLibrary): boolean {
-  return l.sources.has_service_center || l.sources.has_installed_product_json;
+  const s = l.sources;
+  return asBool(s?.has_service_center) || asBool(s?.has_installed_product_json);
 }
 
 /** 表单字段：标签 + 控件。 */

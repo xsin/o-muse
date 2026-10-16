@@ -75,7 +75,14 @@
     "confirm": "确认",
     "refresh": "刷新",
     "search": "搜索",
-    "actions": "操作"
+    "actions": "操作",
+    "crash": {
+      "title": "这个页面出错了",
+      "hint": "应用在这里遇到了未预期的错误。其它页面仍可正常使用。",
+      "where": "「{{label}}」遇到了未预期的错误。其它页面仍可正常使用。",
+      "retry": "重试",
+      "reload": "重新载入窗口"
+    }
   },
   "plugins": {
     "scanning": "正在扫描插件…",
@@ -341,6 +348,24 @@
       "reasonXmlRemove": "删除后，该库将从 Kontakt 经典浏览器中消失",
       "reasonPlistRemove": "删除该库的系统级内容路径与可见性记录",
       "replanned": "文件清单已变化，请重新确认。"
+    },
+    "retry": "重试",
+    "permission": {
+      "hint": "O Muse 读不到存放音色库的文件夹。macOS 会保护「下载 / 文稿 / 桌面」等目录：请打开「系统设置 → 隐私与安全性 → 文件与文件夹」（或「完全磁盘访问权限」），允许 O Muse 访问该文件夹后点「重试」。若音色库在外置磁盘上，请确认磁盘已连接。"
+    },
+    "error": {
+      "badResponse": "后端返回了无法识别的库记录，该条目已跳过。"
+    },
+    "issue": {
+      "MissingProductHints": "缺少 .nicnt 注册",
+      "MissingLegacyRegistration": "缺少 plist 注册",
+      "HiddenInKontakt": "在 Kontakt 中已隐藏",
+      "MissingContentPath": "缺少内容路径",
+      "ContentOffline": "内容目录不可用",
+      "ContentPermissionDenied": "没有读取该目录的权限",
+      "DuplicateSnpid": "SNPID 重复",
+      "DuplicatePath": "内容路径重复",
+      "UnprivilegedWriteRequired": "需要管理员授权"
     }
   },
   "update": {

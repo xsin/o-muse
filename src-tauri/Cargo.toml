@@ -1,6 +1,6 @@
 [package]
 name = "o-muse"
-version = "0.2.1"
+version = "0.2.2"
 description = "O Muse — 音乐人的全能工具箱"
 authors = ["O Muse"]
 edition = "2021"

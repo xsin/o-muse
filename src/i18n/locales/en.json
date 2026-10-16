@@ -75,7 +75,14 @@
     "confirm": "Confirm",
     "refresh": "Refresh",
     "search": "Search",
-    "actions": "Actions"
+    "actions": "Actions",
+    "crash": {
+      "title": "Something went wrong on this screen",
+      "hint": "This part of the app hit an unexpected error. The rest of the app keeps working.",
+      "where": "“{{label}}” hit an unexpected error. The rest of the app keeps working.",
+      "retry": "Try again",
+      "reload": "Reload window"
+    }
   },
   "plugins": {
     "scanning": "Scanning plugins…",
@@ -341,6 +348,24 @@
       "reasonXmlRemove": "Removing this file makes the library disappear from Kontakt's classic browser.",
       "reasonPlistRemove": "Removes the system-level content path and visibility record of this library.",
       "replanned": "The file list changed; please review it again."
+    },
+    "retry": "Try again",
+    "permission": {
+      "hint": "O Muse could not read the folder that holds your libraries. macOS protects folders such as Downloads, Documents and Desktop: open System Settings → Privacy & Security → Files and Folders (or Full Disk Access), allow O Muse to access that folder, then press “Try again”. If a library lives on an external drive, make sure the drive is connected."
+    },
+    "error": {
+      "badResponse": "The backend returned an unrecognised library record; the entry was skipped."
+    },
+    "issue": {
+      "MissingProductHints": "Missing .nicnt registration",
+      "MissingLegacyRegistration": "Missing plist registration",
+      "HiddenInKontakt": "Hidden in Kontakt",
+      "MissingContentPath": "Content path missing",
+      "ContentOffline": "Content folder unavailable",
+      "ContentPermissionDenied": "No permission to read folder",
+      "DuplicateSnpid": "Duplicate SNPID",
+      "DuplicatePath": "Duplicate content path",
+      "UnprivilegedWriteRequired": "Administrator permission needed"
     }
   },
   "update": {

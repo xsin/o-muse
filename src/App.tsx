@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Toast } from "@heroui/react";
+import { useTranslation } from "react-i18next";
 import { useUI, type ActiveView } from "./store/useUI";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import UpdateBanner from "./components/UpdateBanner";
 import MarketPage from "./pages/MarketPage";
@@ -32,6 +34,7 @@ function hashFromView(view: ActiveView): string {
 
 export default function App() {
   const { activeView, openApps, setActive } = useUI();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -57,13 +60,25 @@ export default function App() {
         <div className="flex min-h-0 flex-1">
           <Sidebar />
           <main className="min-w-0 flex-1 overflow-auto p-6">
-            {activeView === "market" && <MarketPage />}
-            {activeView === "settings" && <SettingsPage />}
+            {/* 每个页面各自套一层边界：单个页面崩溃时只该页显示错误，
+                外壳（侧栏、其它已打开页面）继续可用，不会整窗白屏。 */}
+            {activeView === "market" && (
+              <ErrorBoundary label={t("nav.market")}>
+                <MarketPage />
+              </ErrorBoundary>
+            )}
+            {activeView === "settings" && (
+              <ErrorBoundary label={t("nav.settings")}>
+                <SettingsPage />
+              </ErrorBoundary>
+            )}
             {openApps.map((id) => (
               <div key={id} className={activeView === id ? "block" : "hidden"}>
-                {id === "stem_separation" && <StemSeparationPage />}
-                {id === "libraries" && <KontaktLibraryPage />}
-                {id === "plugins" && <PluginManagerPage />}
+                <ErrorBoundary label={t(`apps.${id}.name`)}>
+                  {id === "stem_separation" && <StemSeparationPage />}
+                  {id === "libraries" && <KontaktLibraryPage />}
+                  {id === "plugins" && <PluginManagerPage />}
+                </ErrorBoundary>
               </div>
             ))}
           </main>
