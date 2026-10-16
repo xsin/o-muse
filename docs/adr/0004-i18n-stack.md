@@ -20,7 +20,7 @@
 - 资源文件：`src/i18n/locales/{en,zh}.json`（命名空间 `translation`）。
 - 检测顺序：`['localStorage','navigator']`；持久化键 `ui_lang`（存于 `tauri-plugin-store`）。
 - 默认语言：store 有值→用之；否则系统 `zh-CN`→`zh`，其余→`en`（回退 `en-US`）。
-- App Registry **只存 id/route/icon/enabled**，字符串全走 i18n（如 `apps.stemdeck.name`）。
+- App Registry **只存 id/route/icon/enabled**，字符串全走 i18n（如 `apps.stem_separation.name`）。
 
 ## 理由
 

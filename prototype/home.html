@@ -227,7 +227,7 @@ td{padding:12px 20px;border-bottom:1px solid var(--n-200);color:var(--n-700)}
 
   /* ── data (App Registry — ids only; strings from i18n, see tdd.md §3.1/§4.1) ── */
   var APPS = {
-    stemdeck:  {id:'stemdeck', enabled:true,
+    stem_separation: {id:'stem_separation', enabled:true,
                 icon:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'},
     libraries: {id:'libraries', enabled:true,
                 icon:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'},
@@ -244,7 +244,7 @@ td{padding:12px 20px;border-bottom:1px solid var(--n-200);color:var(--n-700)}
       soon:'即将推出',
       user:{name:'本地用户', tier:'Free'},
       apps:{
-        stemdeck:{name:'StemDeck', sub:'音频分轨', desc:'将整曲拆分为人声 / 鼓 / 贝斯 / 其他 stems，本地运行、隐私优先。'},
+        stem_separation:{name:'Stem Separation', sub:'音频分轨', desc:'将整曲拆分为人声 / 鼓 / 贝斯 / 其他 stems，本地运行、隐私优先。'},
         libraries:{name:'Kontakt Library Manager', sub:'Kontakt 音源库管理', desc:'只读盘点你的 Kontakt 音源库，诊断缺失路径、重复 SNPID、断卷。'},
         plugins:{name:'Audio Plugin Manager', sub:'音频插件管理', desc:'扫描与管理 AU / VST / VST3 / AAX / CLAP 插件。'}
       },
@@ -257,7 +257,7 @@ td{padding:12px 20px;border-bottom:1px solid var(--n-200);color:var(--n-700)}
       soon:'Coming soon',
       user:{name:'Local User', tier:'Free'},
       apps:{
-        stemdeck:{name:'StemDeck', sub:'Audio Separation', desc:'Split a track into vocals / drums / bass / other stems — local, privacy-first.'},
+        stem_separation:{name:'Stem Separation', sub:'Audio Separation', desc:'Split a track into vocals / drums / bass / other stems — local, privacy-first.'},
         libraries:{name:'Kontakt Library Manager', sub:'Kontakt Libraries', desc:'Read-only inventory of your Kontakt libraries; diagnose missing paths, duplicate SNPID, disconnected volumes.'},
         plugins:{name:'Audio Plugin Manager', sub:'Audio Plugins', desc:'Scan and manage AU / VST / VST3 / AAX / CLAP plugins.'}
       },
@@ -342,7 +342,7 @@ td{padding:12px 20px;border-bottom:1px solid var(--n-200);color:var(--n-700)}
     titleEl.textContent=s.name;
     crumbEl.textContent=t('brand')+' / '+s.sub;
     var body;
-    if(id==='stemdeck'){
+    if(id==='stem_separation'){
       body='<div class="drop">'+t('stem.drop')+'<br><small style="color:var(--n-400)">'+t('stem.local')+'</small></div>'+
            '<div style="margin-top:16px"><table><thead><tr><th>任务</th><th>状态</th><th>进度</th></tr></thead>'+
            '<tbody><tr><td class="mono">demo-track.wav</td><td><span class="tag ok"><i></i>完成</span></td><td>100%</td></tr></tbody></table></div>';

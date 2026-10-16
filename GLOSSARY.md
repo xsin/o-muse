@@ -11,7 +11,7 @@
 
 ## 领域单元
 
-- **App（应用）**：O Muse 自身承载的一个**独立功能单元**（如 StemDeck 分轨、Kontakt Library Manager、Audio Plugin Manager）。App 是壳（Tauri + React）中可被启动、在左栏常驻为标签页、且可**多开并存**的单元。App 注册于轻量 *App Registry*，由前端动态渲染。
+- **App（应用）**：O Muse 自身承载的一个**独立功能单元**（如分轨分离、Kontakt Library Manager、Audio Plugin Manager）。App 是壳（Tauri + React）中可被启动、在左栏常驻为标签页、且可**多开并存**的单元。App 注册于轻量 *App Registry*，由前端动态渲染。
   - **不要**将 App 与 *Audio Plugin* 混淆：App 是 O Muse 的功能模块；Audio Plugin 是被扫描管理的第三方音频格式文件。
 - **Audio Plugin（音频插件）**：被 Audio Plugin Manager 扫描与管理的第三方音频格式单元，包括 AU、VST、VST3、AAX、CLAP。它们**不是** O Muse 的 App，也不通过 App Marketplace 分发。
 - **App Registry（应用注册表）**：前端一处轻量清单（常量/薄模块），声明每个 App 的 id、名称、路由、图标、启用态、最低支持版本。首页据此动态渲染卡片与左栏项；v1 不实现远程拉取。
@@ -23,10 +23,10 @@
 
 ## 授权与计费
 
-- **Free / Pro 边界**：Free 与 Pro 共享基于 Apache-2.0（StemDeck）与 MIT（KLM）代码的**只读基础模块**（`core/`）。Pro 通过独立、完全自研的**扩展模块**（`mutate.rs`、自定义目录功能）解锁额外能力。
+- **Free / Pro 边界**：Free 与 Pro 共享 `core/` 中的**只读基础模块**（本仓库独立实现）。Pro 通过独立、完全自研的**扩展模块**（`mutate.rs`、自定义目录功能）解锁额外能力。
 - **License Tier（许可证层级）**：运行期判定结果，取值 `Free` 或 `Pro`。v1 接入 **Dodo Payments** 真实订阅校验（Test Mode Key 已备），由 `tauri-plugin-store` 中的 `license_key` + Dodo 验证结果推导（见 ADR-0003）。
 
 ## 上游来源（合规相关，非领域行为）
 
-- **StemDeck**：音频分轨上游，Apache-2.0，本产品基于其源码定制改造但无官方关联（见 `licenses/NOTICE`）。
+- **上游参考项目**：本项目在设计阶段参考过的开源项目（如多轨 UI 交互、sidecar 生命周期管理）。本项目为独立实现，**未复制其源代码**，与其无官方关联（见 `licenses/NOTICE`）。
 - **KLM（Kontakt Library Manager）**：Kontakt 库管理逻辑参考来源，MIT；本产品用 Rust 重新实现其解析逻辑，未复制 Dart 源码。

@@ -24,12 +24,11 @@
 | Task 9 | 自定义目录 + 前端集成 (v1.1) | done | `c00fa5f` |
 | Task 10 | v1.1 集成测试 + 性能 (v1.1) | done | `[Task 10]` |
 
-**当前应执行**：v1（Task 0–6）与 v1.1（Task 7–10）均已实现并提交。当前阶段 = **整体代码 review + 一轮优化**（用户体验与鲁棒性）。
+**当前应执行**：v1（Task 0–6）、v1.1（Task 7–10）、review+优化轮、公测期分发（gh-pages + Release）、v1.2 分轨运行时自举均已完成并发布。当前最新版本 **0.1.2**。
 
-> **Task 0 执行备注**：上游源码导入隔离目录 `vendor/stemdeck/`（保留全部原始文件与版权头、零 `.git` 残留），
-> 以供归属/可追溯性核查；本项目自身为 Rust 独立实现。`licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}`、
-> `README.md` 资金声明、`.gitignore`（含 `.env`）均已就位；NOTICE 内 commit hash =
-> `5f9405ca68ac31b31ae07ac416141d4d1f7b5f3a`；单次 `[Task 0]` commit（无原始 history）。
+> **Task 0 执行备注**：本项目为 Rust **独立实现**，未导入任何上游源码，仓库内无 `vendor/` 目录。
+> `LICENSE` + `licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}`、`README.md` 资金声明、
+> `.gitignore`（含 `.env`）均已就位；单次 `[Task 0]` commit（无上游 history）。
 > 工作区 = `/Volumes/Pluto/dev/proj/MuseRig`。
 
 ---
@@ -72,7 +71,7 @@
 - Rust 中不得用 `std::process::Command` 启动**非 Sidecar** 进程（Python sidecar 除外）。
 - 不修改 `licenses/`（`APACHE-2.0.txt`/`MIT.txt`/`NOTICE`）；不删除复制文件的 `Copyright` 头。
 - Pro 模块（`mutate.rs`、自定义目录）**不得含 Apache-2.0 原始代码**；`Cargo.toml` 不引入 GPL/AGPL。
-- 不恢复 StemDeck Git 历史；不 `git clone --mirror` / `fetch --unshallow`；不留 submodule 引用。
+- 不引入或恢复任何上游项目的 Git 历史；不 `git clone --mirror` / `fetch --unshallow`；不留 submodule 引用。
 - 不要提交 `.env`（含 DODO_* 密钥）→ 加入 `.gitignore`，提供 `.env.example` 模板。
 
 ---
@@ -80,15 +79,15 @@
 ## 4. Task 索引（压缩版，细节回 `plan.md`）
 
 ### Task 0 — 仓库初始化 + 许可证合规（前置：无）
-- `git clone --depth 1 https://github.com/stemdeckapp/stemdeck.git /tmp/stemdeck-src`，记 `git rev-parse HEAD`。
-- 工作区 `git init -b main`；`rsync -av --exclude='.git'` 导入；清残留 `.git*`。
-- `licenses/APACHE-2.0.txt`（原 LICENSE）、`MIT.txt`、`NOTICE`（记 commit hash）。
-- `README.md` 含资金声明（逐字）；`.gitignore`（含 `.env`）；首次 commit `[Task 0]`。
-- 验收：无 stemdeckapp 原始 commit；三许可证文件在；NOTICE 含 StemDeck+KLM；README 含"不接受任何资金"；无残留 `.git`；版权头保留。
+- 工作区新建 Git 仓库（`git init -b main`），**不导入任何上游源码**（独立实现原则）。
+- `LICENSE`（本项目自身 Apache-2.0）；`licenses/APACHE-2.0.txt`、`MIT.txt`、`NOTICE`
+  （NOTICE 记**设计参考项目与直接依赖**的归属，并声明未复制源代码）。
+- `README.md` 含资金/归属声明；`.gitignore`（含 `.env`）；首次 commit `[Task 0]`。
+- 验收：无上游原始 commit；`LICENSE` 与 `licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}` 齐全；NOTICE 含设计参考与依赖归属；README 含"不接受任何资金"；无残留 `.git`。
 
 ### Task 1 — Rust 后端骨架（前置：Task 0）✅ done
 - 建 `src-tauri/src/{commands,core/library_manager,core/plugin_scanner,core/license}` 与各 `mod.rs`（含 `placeholder()`）。
-- 按方向纠正，分轨命令模块命名为 `commands/stem_separation.rs`（非 plan 原写的 `commands/stemdeck.rs`），并新增 `core/stem_engine/{sidecar,task}.rs` 承载 sidecar 生命周期与任务模型（参考 StemDeck 设计思路，未复制源码）。
+- 分轨命令模块为 `commands/stem_separation.rs`，并新增 `core/stem_engine/{sidecar,task}.rs` 承载 sidecar 生命周期与任务模型（独立实现，未复制上游源码）。
 - `Cargo.toml` 依赖见 §2（版本按 ADR-0001 升级；**quick-xml 0.42 / plist 1.10 / sha2 0.11 / rayon 1.12**）。
 - `lib.rs` 注册 shell/store/sql 插件。
 - 验收：`cargo check` 零错误（实际 0 warning / 0 error）。禁止写业务逻辑。
@@ -148,7 +147,7 @@
 - 验收：`npm run build` 通过 + `npm run typecheck` 0 错误 + `cargo check` 仍 0 错误；`grep -ri stemdeck src-tauri src python-backend` 空。
 - **Task 4 执行备注**：
   - 前端栈从 plan 的 React19/Vite8/TS7 **回退到 React18.3 / Vite5.4 / TS5.6**（tdd.md §7 允许的兜底），因前沿组合与 `@tauri-apps/cli`/Tauri 模板存在真实摩擦风险；记录于此。
-  - **强制命名**：appRegistry 的 id/route 统一为 `stem_separation`（非 `stemdeck`），符合"代码不得出现 stemdeck"硬规范；tdd.md §3.1 示例里的 `id:'stemdeck'` 仅为示例，以本实现为准。
+  - **强制命名**：appRegistry 的 id/route 统一为 `stem_separation`；代码内不得出现旧项目名。
   - `tauri.conf.json`：`beforeDevCommand= npm run dev`、`beforeBuildCommand= npm run build`、`frontendDist="../dist"`（devUrl 仍 5173）。
   - npm 缓存因沙箱拒写 `~/.npm`，改设 `npm_config_cache=.npm-cache/`（已 gitignore）。
 
@@ -246,4 +245,4 @@
 
 ## 6. 许可证合规清单（每 Task 后勾选）
 
-- [ ] 三许可证文件未改；[ ] 复制文件保留 `Copyright` 头；[ ] KLM 移植逻辑顶部注明 MIT 来源；[ ] Pro 模块不含 Apache 原始代码；[ ] README 含资金声明；[ ] NOTICE 含 StemDeck commit hash；[ ] `git log` 无 stemdeckapp 原始 commit；[ ] 无残留 submodule；[ ] `Cargo.toml` 无 GPL/AGPL。
+- [ ] `LICENSE`+`licenses/{APACHE-2.0.txt,MIT.txt,NOTICE}` 未改；[ ] 未从上游复制源码；[ ] 参考外部逻辑的模块顶部注明来源与许可；[ ] Pro 模块不含上游原始代码；[ ] README 含资金声明；[ ] NOTICE 含设计参考与依赖归属；[ ] `git log` 无上游原始 commit；[ ] 无残留 submodule；[ ] `Cargo.toml` 无 GPL/AGPL。

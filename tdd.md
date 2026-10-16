@@ -11,7 +11,7 @@
 | 插件 | plugin-shell / store / sql | 2.5.0 / 2.5.0 / 2.6.0 | sql 用 `features=["sqlite"]` |
 | 后端主逻辑 | Rust | 1.99 | 新增模块全用 Rust |
 | 分轨引擎 | Python + FastAPI（Sidecar） | 开发态 Python 3.14；运行态自举 CPython 3.12.15 | 运行时依赖锁定于 `requirements-runtime.txt`：fastapi 0.143.2 / uvicorn 0.54.0 / demucs 4.1.0 / numpy ≥1.26,<2（不含 librosa/pyloudnorm） |
-| 前端 | React 19 + TS 7 + Vite 8 + TailwindCSS 4 | react 19.3.1 / react-dom 19.3.1 / react-router-dom 7.18.4 / vite 8.3.4 / @vitejs/plugin-react 6.1.2 / typescript 7.0.2 / zustand 5.0.15 | |
+| 前端 | React 18 + TS 5 + Vite 5（样式用 CSS 变量，未引入 Tailwind） | react 18.3.1 / react-dom 18.3.1 / react-router-dom 6.27.0 / vite 5.4.10 / @vitejs/plugin-react 4.3.3 / typescript 5.6.3 / zustand 4.5.5 | |
 | 本地存储 | SQLite via tauri-plugin-sql | 2.6.0 | |
 | 计费 | Dodo Payments | — | Test Mode Key 已备（ADR-0003） |
 | 国际化 | i18next + react-i18next + browser-languagedetector | i18next 26.4.5 / react-i18next 17.0.16 / detector 8.2.1 | zh-CN + en-US，默认随系统（ADR-0004） |
@@ -24,7 +24,7 @@ Rust 辅助依赖（按 ADR-0001 升级）：`serde 1.0.229`、`serde_json 1`、
 ## 2. 目录结构（最终形态，沿用 plan §1.5）
 
 ```
-music-rig/
+o-muse/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── lib.rs                 # Tauri 入口 + 插件注册

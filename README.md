@@ -2,7 +2,7 @@
 
 **音乐人的全能工具箱**
 
-O Muse 是一个跨平台桌面应用（Tauri 2 + React 19），把音乐制作相关的
+O Muse 是一个跨平台桌面应用（Tauri 2 + React 18），把音乐制作相关的
 工具以「App」为单位组织起来。左侧常驻工具箱，可同时打开多个 App 并在
 它们之间切换。所有处理均在本地完成，隐私优先，离线运行。
 
@@ -49,7 +49,7 @@ Meta 的 [Demucs](https://github.com/facebookresearch/demucs)（MIT），
 | 层 | 技术 |
 |---|---|
 | 桌面框架 | Tauri 2 |
-| 前端 | React 19 + TypeScript |
+| 前端 | React 18 + TypeScript + Vite 5 |
 | 后端 | Rust |
 | 分轨引擎 | Python + FastAPI（Sidecar）+ Demucs |
 | 本地存储 | SQLite |
