@@ -10,6 +10,8 @@
 //  - 检查与 spawn 在同一临界区内完成，避免并发调用重复拉起进程争抢端口
 //  - 健康检查超时必须**报错**，而非带着死进程继续返回 base URL
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::async_runtime::Receiver;
 use tauri::Manager;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -68,36 +70,87 @@ pub fn ensure_sidecar(app: &tauri::AppHandle) -> crate::core::stem_engine::task:
 
     // 后台消费 stdout/stderr，避免管道缓冲导致进程挂起；
     // 进程退出时清空状态，使下次调用能重新拉起。
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            if let CommandEvent::Terminated(_) = event {
-                with_child(&handle, |slot| {
-                    slot.take();
-                });
-                break;
+    //
+    // 同时把 stderr 尾部留存下来：若 sidecar 因缺依赖/缺文件秒退，
+    // 直接把真实原因报给用户，而不是干等 30s 超时后给一句泛泛的提示。
+    let log = Arc::new(Mutex::new(String::new()));
+    let died = Arc::new(AtomicBool::new(false));
+    {
+        let handle = app.clone();
+        let log_task = Arc::clone(&log);
+        let died_task = Arc::clone(&died);
+        tauri::async_runtime::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                match event {
+                    CommandEvent::Stderr(bytes) => {
+                        let line = String::from_utf8_lossy(&bytes).trim().to_string();
+                        if !line.is_empty() {
+                            if let Ok(mut g) = log_task.lock() {
+                                g.push_str(&line);
+                                g.push('\n');
+                                // 只保留尾部 2000 字符，避免无限增长
+                                if g.len() > 2000 {
+                                    let cut = g.len() - 2000;
+                                    *g = g[cut..].to_string();
+                                }
+                            }
+                        }
+                    }
+                    CommandEvent::Terminated(_) => {
+                        died_task.store(true, Ordering::SeqCst);
+                        with_child(&handle, |slot| {
+                            slot.take();
+                        });
+                        break;
+                    }
+                    _ => {}
+                }
             }
-        }
-    });
+        });
+    }
 
-    wait_for_health()
+    wait_for_health(&log, &died)
 }
 
 /// 阻塞等待 sidecar 的 `/health` 端点就绪（最多约 30s）。
 ///
-/// 超时**必须报错**：否则调用方会拿着一个死掉的进程继续发 HTTP，
-/// 最终只看到含糊的 "http: ..." 错误而非"服务启动失败"。
-fn wait_for_health() -> crate::core::stem_engine::task::Result<String> {
+/// - 进程已退出 → **立即失败**并附上捕获到的 stderr（避免无谓等待）
+/// - 超时 → 报错并附上 stderr 尾部，便于定位（缺 Python、缺依赖等）
+fn wait_for_health(
+    log: &Arc<Mutex<String>>,
+    died: &Arc<AtomicBool>,
+) -> crate::core::stem_engine::task::Result<String> {
     let base = format!("http://127.0.0.1:{}", SIDECAR_PORT);
     for _ in 0..150 {
         if let Ok(200) = reqwest::blocking::get(format!("{base}/health")).map(|r| r.status().as_u16()) {
             return Ok(base);
         }
+        if died.load(Ordering::SeqCst) {
+            return Err(crate::core::stem_engine::task::Error::Sidecar(
+                sidecar_failure_detail(log, "分轨服务启动后立即退出"),
+            ));
+        }
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
     Err(crate::core::stem_engine::task::Error::Sidecar(
-        "分轨服务启动超时（30s），请检查 Python sidecar 是否可用".to_string(),
+        sidecar_failure_detail(log, "分轨服务启动超时（30s）"),
     ))
+}
+
+/// 组装失败详情：把 sidecar 捕获到的 stderr 尾部拼进来。
+///
+/// 常见的真实原因（缺 python3、缺 fastapi/demucs、python-backend 未随包分发）
+/// 都会出现在 stderr 里，直接展示比泛泛的"超时"有用得多。
+fn sidecar_failure_detail(log: &Arc<Mutex<String>>, headline: &str) -> String {
+    let detail = log
+        .lock()
+        .map(|g| g.trim().to_string())
+        .unwrap_or_default();
+    if detail.is_empty() {
+        format!("{headline}（未捕获到错误输出）")
+    } else {
+        format!("{headline}：{detail}")
+    }
 }
 
 /// 终止 sidecar。供命令层显式调用（如应用退出前清理）。

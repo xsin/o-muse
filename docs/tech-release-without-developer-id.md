@@ -397,3 +397,18 @@ OMUSE_BASE_URL="https://github.com/xsin/o-muse/releases" \
    未开启时 `curl` 会 404，脚本会明确报错（不会静默失败）。
 4. **Rosetta**：x86_64 包在 Apple Silicon 上依赖 Rosetta 2；universal 包无此问题，
    故仍以 universal 为优先。
+5. **分轨功能依赖本地 Python**：`python-backend/` 源码随包分发到
+   `Contents/Resources/python-backend`（`bundle.resources`），
+   但**不内置 Python 运行时**——sidecar 启动器会依次寻找项目内 venv、
+   再回退系统 `python3`。
+   首次使用前需安装依赖：
+
+   ```bash
+   python3 -m pip install -r python-backend/requirements.txt
+   ```
+
+   （含 `demucs`，会拉取 PyTorch，体积较大。）
+   缺依赖时应用会直接显示**可操作**的错误提示（含安装命令），
+   而不是干等 30s 超时。
+6. **其余功能不受影响**：插件扫描、Kontakt 库盘点、i18n、主题、
+   许可激活均不依赖 Python，安装后即可用。
