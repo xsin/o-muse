@@ -96,13 +96,13 @@
 - **zustand** (`^4.5.5`)：MIT；轻量全局 store（openApps/activeView/theme/lang）。
 - **dev**：`@tauri-apps/cli` (`^2.1.0`, Apache-2.0 OR MIT)、`typescript` (`^5.6.3`, Apache-2.0)、`vite` (`^5.4.10`, MIT)、`@vitejs/plugin-react` (`^4.3.3`, MIT)、`@types/react`/`@types/react-dom` (`^18.3.x`, MIT)。
 
-> 注：前端栈从 plan 的 React19/Vite8/TS7 回退到 React18/Vite5/TS5（tdd.md §7 允许的兜底）。npm 缓存置于仓库内 `.npm-cache/`（沙箱拒写 `~/.npm`）。
+> 注：npm 缓存置于仓库内 `.npm-cache/`（沙箱拒写 `~/.npm`）。前端栈已于 v1.3 升级至最新（React 19 / Vite 8 / TS 7 / Tailwind 4 / HeroUI 3）。
 
 ### rusqlite（Task 8，v1.1）
 - **URL**: https://github.com/rusqlite/rusqlite
 - **许可证**: MIT License
 - **使用方式**: 插件元数据增量缓存的 SQLite 驱动（`src-tauri/Cargo.toml`，feature `bundled` 自带 SQLite 源码）。
-- **决策说明**: 缓存层选用 `rusqlite` 而非 `tauri-plugin-sql`，以保持 `core/` 无 Tauri 依赖，使缓存逻辑可在单元测试中直接建库验证。`tauri-plugin-sql` 仍保留注册，供 v1.5+ 的其他数据需求使用。
+- **决策说明**: 缓存层选用 `rusqlite` 而非 `tauri-plugin-sql`，以保持 `core/` 无 Tauri 依赖，使缓存逻辑可在单元测试中直接建库验证。`tauri-plugin-sql` 已于 v1.3 移除：它与 `rusqlite` 都声明链接原生 `sqlite3`，Cargo 不允许同一 `links` 值出现两份；且该插件从未被实际调用。
 
 ### tauri-plugin-dialog（Task 9，v1.1）
 - **URL**: https://github.com/tauri-apps/plugins-workspace
@@ -132,3 +132,26 @@
 - **URL**: https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th
 - **许可证**: MIT（Demucs 项目）
 - **使用方式**: 由 Rust 端主动下载并按固定 SHA256 校验，落位到 `<runtime>/torch-home/hub/checkpoints/`，使分轨装完即可离线运行。
+
+### HeroUI v3（`@heroui/react` 3.2.6，v1.3）
+- **URL**: https://github.com/heroui-inc/heroui
+- **许可证**: MIT
+- **使用方式**: 全站 UI 组件库（表格 / 模态 / 表单 / 反馈等）。基于 React Aria（无障碍）+ Tailwind CSS v4，无 CSS-in-JS 运行时。
+- **说明**: 要求 React ≥19 与 Tailwind ≥4，故本版本一并升级了 React 与样式栈。
+
+### Tailwind CSS v4（`tailwindcss` / `@tailwindcss/vite` 4.3.3，v1.3）
+- **URL**: https://github.com/tailwindlabs/tailwindcss
+- **许可证**: MIT
+- **使用方式**: 原子化样式引擎（Vite 插件形态）。HeroUI 的样式基于它构建。
+- **说明**: v4 采用 CSS-first 配置（`@import "@heroui/styles"`），不再需要 `tailwind.config.js`。
+
+### React 19（`react` / `react-dom` 19.3.1，v1.3）
+- **URL**: https://github.com/facebook/react
+- **许可证**: MIT
+- **使用方式**: UI 框架。由 18.3.1 升级而来（HeroUI v3 要求 ≥19）。
+
+### Vite 8（`vite` 8.3.4 + `@vitejs/plugin-react` 6.1.2，v1.3）
+- **URL**: https://github.com/vitejs/vite
+- **许可证**: MIT
+- **使用方式**: 前端构建工具。v8 使用 Rolldown 内核，构建更快；对缺失导出等错误更严格（不再静默放过）。
+- **说明**: 由 5.4.10 升级而来。

@@ -1,187 +1,189 @@
-// 共享 UI 原语（review 优化）
+// 共享 UI 原语与格式化工具
 //
-// 此前 panel/btnPrimary/btnSecondary/input/chip 在 PluginManagerPage 与
-// StemSeparationPage 中**逐字重复**，且 Market/Library/Settings 各自内联一套
-// 样式，导致视觉语言不统一。此处统一收敛，供各页面复用。
+// 样式栈：Tailwind CSS v4 + HeroUI 3。页面统一从这里取组件与工具函数，
+// 避免各页各自造轮子（历史上的内联样式重复问题）。
 
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Button, Card, Chip, EmptyState, ProgressBar, Spinner } from "@heroui/react";
 
-export const panel: CSSProperties = {
-  padding: 16,
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  boxShadow: "var(--shadow)",
-};
-
-export const btnPrimary: CSSProperties = {
-  padding: "8px 16px",
-  borderRadius: 8,
-  border: "none",
-  background: "var(--brand)",
-  // 用 --brand-fg 令牌而非硬编码 #fff：深色主题下 brand 更亮，
-  // 白字对比度不足 4.5:1（review 修复）。
-  color: "var(--brand-fg)",
-  fontWeight: 600,
-  cursor: "pointer",
-  fontSize: 13,
-};
-
-export const btnSecondary: CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "var(--surface)",
-  color: "var(--text)",
-  cursor: "pointer",
-  fontSize: 13,
-};
-
-export const input: CSSProperties = {
-  flex: 1,
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "var(--surface)",
-  color: "var(--text)",
-  fontSize: 13,
-};
-
-export const chip: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "3px 6px 3px 10px",
-  borderRadius: 999,
-  border: "1px solid var(--border)",
-  background: "var(--surface-2)",
-  color: "var(--text-muted)",
-  fontSize: 11,
-};
-
-export const cell: CSSProperties = {
-  padding: "10px 12px",
-  borderBottom: "1px solid var(--border)",
-  color: "var(--text)",
-  verticalAlign: "top",
-};
-
-/** 面板容器 */
-export function Panel({
-  children,
-  style,
-}: {
-  children: ReactNode;
-  style?: CSSProperties;
-}) {
-  return <div style={{ ...panel, ...style }}>{children}</div>;
-}
-
-/** 可键盘操作的按钮（全站统一，修复 a11y：此前点击区均为纯 div）。 */
-export function Button({
-  children,
-  onClick,
-  disabled,
-  variant = "secondary",
-  style,
+/** 页面区块容器：HeroUI Card 的统一封装。 */
+export function Section({
   title,
+  actions,
+  children,
+  className,
 }: {
+  title?: ReactNode;
+  actions?: ReactNode;
   children: ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "secondary";
-  style?: CSSProperties;
-  title?: string;
+  className?: string;
 }) {
-  const base = variant === "primary" ? btnPrimary : btnSecondary;
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      style={{
-        ...base,
-        opacity: disabled ? 0.5 : 1,
-        ...style,
-      }}
-    >
-      {children}
-    </button>
+    <Card className={className}>
+      {(title || actions) && (
+        <Card.Header className="flex flex-row items-center justify-between gap-3">
+          {typeof title === "string" ? <Card.Title>{title}</Card.Title> : title}
+          {actions}
+        </Card.Header>
+      )}
+      <Card.Content>{children}</Card.Content>
+    </Card>
   );
 }
 
-/** 不确定进度条（耗时操作：扫描 / 分轨）。 */
-export function IndeterminateBar() {
+/** 主操作按钮（品牌色）。 */
+export function PrimaryButton({
+  children,
+  onPress,
+  isDisabled,
+  className,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  isDisabled?: boolean;
+  className?: string;
+}) {
   return (
-    <div
-      style={{
-        height: 4,
-        background: "var(--surface-2)",
-        borderRadius: 999,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          height: "100%",
-          width: "40%",
-          background: "var(--brand)",
-          borderRadius: 999,
-          animation: "mr-indet 1.1s ease-in-out infinite",
-        }}
-      />
+    <Button variant="primary" onPress={onPress} isDisabled={isDisabled} className={className}>
+      {children}
+    </Button>
+  );
+}
+
+/** 次级按钮。 */
+export function SecondaryButton({
+  children,
+  onPress,
+  isDisabled,
+  className,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  isDisabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <Button variant="secondary" onPress={onPress} isDisabled={isDisabled} className={className}>
+      {children}
+    </Button>
+  );
+}
+
+/** 危险操作按钮（删除等）。 */
+export function DangerButton({
+  children,
+  onPress,
+  isDisabled,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  isDisabled?: boolean;
+}) {
+  return (
+    <Button variant="danger" onPress={onPress} isDisabled={isDisabled}>
+      {children}
+    </Button>
+  );
+}
+
+/** 空状态占位。 */
+export function Empty({ children }: { children: ReactNode }) {
+  return (
+    <EmptyState.Root className="py-10 text-center text-sm opacity-70">{children}</EmptyState.Root>
+  );
+}
+
+/** 加载中。 */
+export function Loading({ label }: { label?: string }) {
+  return (
+    <div className="flex items-center gap-2 py-6 text-sm opacity-70">
+      <Spinner.Root />
+      {label && <span>{label}</span>}
     </div>
   );
 }
 
-/** 确定进度条（0–100）。 */
-export function ProgressBar({ value }: { value: number }) {
+/** 错误提示。 */
+export function ErrorText({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-danger">{children}</p>;
+}
+
+/** 成功提示。 */
+export function OkText({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-success">{children}</p>;
+}
+
+/** 确定进度条。 */
+export function Progress({ value, label }: { value: number; label?: string }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <div
-      style={{
-        height: 8,
-        background: "var(--surface-2)",
-        borderRadius: 999,
-        overflow: "hidden",
-      }}
-    >
+    <div className="flex flex-col gap-1">
+      {label && (
+        <div className="flex justify-between text-xs opacity-70">
+          <span>{label}</span>
+          <span>{pct}%</span>
+        </div>
+      )}
+      <ProgressBar.Root value={pct}>
+        <ProgressBar.Track>
+          <ProgressBar.Fill />
+        </ProgressBar.Track>
+      </ProgressBar.Root>
+    </div>
+  );
+}
+
+/** 不确定进度条（耗时且无法预估时使用）。 */
+export function IndeterminateBar() {
+  return (
+    <div className="h-1 w-full overflow-hidden rounded-full bg-default">
       <div
-        style={{
-          height: "100%",
-          width: `${pct}%`,
-          background: "var(--brand)",
-          borderRadius: 999,
-          transition: "width .3s ease",
-        }}
+        className="h-full w-2/5 rounded-full bg-accent"
+        style={{ animation: "om-indet 1.1s ease-in-out infinite" }}
       />
     </div>
   );
 }
 
-/** 空状态占位 */
-export function EmptyState({ children }: { children: ReactNode }) {
-  return <Panel style={{ color: "var(--text-muted)", fontSize: 13 }}>{children}</Panel>;
-}
-
-/** 错误提示 */
-export function ErrorText({ children }: { children: ReactNode }) {
+/** 小标签。 */
+export function Badge({ children, color }: { children: ReactNode; color?: "default" | "accent" | "success" | "warning" | "danger" }) {
   return (
-    <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>{children}</p>
+    <Chip size="sm" color={color ?? "default"}>
+      <Chip.Label>{children}</Chip.Label>
+    </Chip>
   );
 }
 
-/** 成功提示 */
-export function OkText({ children }: { children: ReactNode }) {
-  return <p style={{ color: "var(--ok)", fontSize: 13, margin: 0 }}>{children}</p>;
+// ── 格式化工具 ────────────────────────────────────────────
+
+/** 字节 → 人类可读（用于插件大小、库占用、下载进度）。 */
+export function formatBytes(n: number | null | undefined): string {
+  if (n == null) return "—";
+  if (n === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  const v = n / 1024 ** i;
+  return `${v >= 100 || i === 0 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
 }
 
 /**
  * 把主目录下的路径显示为 `~/...`。
- * 覆盖 `/Users/x` 与 macOS 实际卷路径 `/System/Volumes/Data/Users/x`。
+ * 同时覆盖 macOS 实际卷路径 `/System/Volumes/Data/Users/x`。
  */
 export function displayPath(p: string): string {
   return p
     .replace(/^\/System\/Volumes\/Data\/Users\/[^/]+/, "~")
     .replace(/^\/Users\/[^/]+/, "~");
+}
+
+/** ISO 时间 → 本地短格式；解析失败原样返回。 */
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }

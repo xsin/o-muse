@@ -26,7 +26,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 版本号单一来源：src-tauri/tauri.conf.json
       - name: Read version from tauri.conf.json
@@ -41,7 +41,7 @@ jobs:
           echo "O Muse version: $VERSION"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: npm

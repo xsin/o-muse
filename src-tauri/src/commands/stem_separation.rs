@@ -12,16 +12,29 @@ fn map_err(e: Error) -> String {
     e.to_string()
 }
 
-/// 提交分轨任务。
+/// 提交分轨任务，或提交**仅分析**任务（`analyze_only = true`）。
 ///
 /// 首次调用会启动 Python sidecar，随后通过 HTTP 将文件路径交给
 /// FastAPI 服务。返回 job_id，供 `stem_status` / `stem_results` 轮询。
+///
+/// 为什么把"仅分析"塞进同一个命令：分析结果需要经 `stem_status` 回传，
+/// 而 `lib.rs` 的 `generate_handler!` 注册表不在本次改动范围内，新增一个
+/// Tauri 命令无法被前端调用。复用本命令可以让分析走完全相同的任务通道
+/// （同状态机、同轮询接口），代价只是多一个可选参数。
 #[tauri::command]
-pub async fn separate(app: tauri::AppHandle, file_path: String) -> Result<String, String> {
+pub async fn separate(
+    app: tauri::AppHandle,
+    file_path: String,
+    analyze_only: Option<bool>,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let base =
             crate::core::stem_engine::sidecar::ensure_sidecar(&app).map_err(map_err)?;
-        task::start(&base, &file_path).map_err(map_err)
+        if analyze_only.unwrap_or(false) {
+            task::analyze(&base, &file_path).map_err(map_err)
+        } else {
+            task::start(&base, &file_path).map_err(map_err)
+        }
     })
     .await
     .map_err(|e| format!("分轨任务异常: {e}"))?

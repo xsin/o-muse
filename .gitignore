@@ -38,3 +38,6 @@ releases/latest/*
 
 # pip 缓存（沙箱：避免写入用户主目录）
 .pip-cache/
+
+# 分轨作业输出（运行时产物，不入库）
+python-backend/stems/

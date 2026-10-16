@@ -1,0 +1,46 @@
+/* 全局样式入口
+ *
+ * 样式栈：Tailwind CSS v4 + HeroUI 3。
+ * `@heroui/styles` 会一并引入 Tailwind 基础层、HeroUI 组件样式、工具类，
+ * 以及默认主题变量（含暗色主题）。
+ *
+ * 暗色约定：HeroUI 使用 [data-theme="dark"]，与本应用的既有约定一致
+ * （见 src/store/useUI.ts 的 applyTheme），因此主题切换无需额外适配。
+ */
+@import "@heroui/styles";
+
+/* ── 品牌色 ────────────────────────────────────────────────
+ * HeroUI 通过 --accent 系列令牌驱动主色。这里把 O Muse 的品牌紫
+ * 映射进去，其余颜色沿用 HeroUI 默认主题，保证亮/暗两套都协调。
+ */
+@layer theme {
+  :root {
+    --accent: oklch(0.58 0.22 285);
+    --accent-hover: oklch(0.52 0.22 285);
+    --accent-foreground: oklch(0.99 0 0);
+  }
+
+  [data-theme="dark"] {
+    --accent: oklch(0.68 0.19 285);
+    --accent-hover: oklch(0.74 0.17 285);
+    --accent-foreground: oklch(0.14 0.01 285);
+  }
+}
+
+/* 应用根容器铺满窗口（Tauri 桌面壳） */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* 不确定进度条动画（扫描 / 分轨等耗时操作的过渡态） */
+@keyframes om-indet {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}

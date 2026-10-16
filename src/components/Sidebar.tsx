@@ -1,131 +1,80 @@
 import { useTranslation } from "react-i18next";
+import { Button } from "@heroui/react";
 import { useUI, type AppId } from "../store/useUI";
 import { appRegistry } from "../appRegistry";
 
+/** 左栏常驻坞：工具箱 + 已打开的 App 标签 + 设置。 */
 export default function Sidebar() {
   const { t } = useTranslation();
   const { openApps, activeView, closeApp, setActive } = useUI();
 
   return (
-    <aside
-      style={{
-        width: 232,
-        flexShrink: 0,
-        background: "var(--surface)",
-        borderRight: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        padding: "16px 12px",
-        gap: 4,
-      }}
-    >
-      <div
-        style={{
-          fontWeight: 700,
-          fontSize: 18,
-          padding: "8px 12px 16px",
-          color: "var(--brand-strong)",
-        }}
-      >
+    <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3">
+      <div className="px-3 pb-4 pt-2 text-lg font-bold text-accent">
         {t("app.title")}
       </div>
 
       <NavItem
         label={t("nav.market")}
         active={activeView === "market"}
-        onClick={() => setActive("market")}
+        onPress={() => setActive("market")}
       />
 
       {openApps.map((id: AppId) => {
         const def = appRegistry.find((a) => a.id === id);
+        const isActive = activeView === id;
         return (
-          <div
-            key={id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <button
-              onClick={() => setActive(id)}
-              aria-current={activeView === id ? "page" : undefined}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                cursor: "pointer",
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "none",
-                textAlign: "left",
-                background:
-                  activeView === id ? "var(--surface-2)" : "transparent",
-                color: activeView === id ? "var(--brand-strong)" : "var(--text)",
-                fontSize: 14,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
+          <div key={id} className="flex items-center gap-1">
+            <Button
+              variant={isActive ? "secondary" : "ghost"}
+              className="min-w-0 flex-1 justify-start"
+              onPress={() => setActive(id)}
+              aria-current={isActive ? "page" : undefined}
             >
-              {def?.icon} {t(`apps.${id}.name`)}
-            </button>
-            <button
-              onClick={() => closeApp(id)}
-              title={t("common.close")}
+              <span className="shrink-0">{def?.icon}</span>
+              <span className="truncate">{t(`apps.${id}.name`)}</span>
+            </Button>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
               aria-label={t("common.close")}
-              style={{
-                border: "none",
-                background: "transparent",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 14,
-                padding: 4,
-              }}
+              onPress={() => closeApp(id)}
             >
               ✕
-            </button>
+            </Button>
           </div>
         );
       })}
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
       <NavItem
         label={t("nav.settings")}
         active={activeView === "settings"}
-        onClick={() => setActive("settings")}
+        onPress={() => setActive("settings")}
       />
     </aside>
   );
 }
 
-/** 可键盘操作的导航项（review 修复：此前为纯 div，鼠标专用）。 */
 function NavItem({
   label,
   active,
-  onClick,
+  onPress,
 }: {
   label: string;
   active: boolean;
-  onClick: () => void;
+  onPress: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <Button
+      variant={active ? "secondary" : "ghost"}
+      className="justify-start font-medium"
+      onPress={onPress}
       aria-current={active ? "page" : undefined}
-      style={{
-        cursor: "pointer",
-        padding: "8px 12px",
-        borderRadius: 8,
-        border: "none",
-        textAlign: "left",
-        background: active ? "var(--surface-2)" : "transparent",
-        color: active ? "var(--brand-strong)" : "var(--text)",
-        fontSize: 14,
-        fontWeight: active ? 600 : 400,
-      }}
     >
       {label}
-    </button>
+    </Button>
   );
 }

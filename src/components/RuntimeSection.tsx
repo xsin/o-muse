@@ -1,4 +1,4 @@
-// 分轨运行时管理（v1.2）
+// 分轨运行时管理
 //
 // 分轨依赖 PyTorch（约 151MB）+ 模型权重（约 84MB）+ 自包含 CPython（24MB），
 // 合计约 259MB 下载 / ~900MB 落盘，故按需自举而非随包分发。
@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Panel, Button, ErrorText, OkText, ProgressBar } from "./ui";
+import { Chip, Modal, Button } from "@heroui/react";
+import { Section, PrimaryButton, ErrorText, OkText, Progress } from "./ui";
 
 type Stage =
   | "missing"
@@ -57,6 +58,7 @@ export default function RuntimeSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -86,7 +88,6 @@ export default function RuntimeSection() {
     try {
       const s = await invoke<RuntimeStatus>("install_runtime");
       setStatus(s);
-      setNotice(null);
     } catch (e) {
       setError(String(e));
       await refresh();
@@ -96,8 +97,8 @@ export default function RuntimeSection() {
     }
   };
 
-  const remove = async () => {
-    if (!window.confirm(t("runtime.confirmRemove"))) return;
+  const doRemove = async () => {
+    setConfirmRemove(false);
     setError(null);
     try {
       await invoke("remove_runtime");
@@ -108,68 +109,52 @@ export default function RuntimeSection() {
     }
   };
 
-  const stage = busy && progress ? progress.stage : status?.stage ?? "missing";
-  const pct = busy && progress?.progress != null ? progress.progress : status?.progress ?? 0;
+  const stage: Stage = busy && progress ? progress.stage : (status?.stage ?? "missing");
+  const pct = busy && progress?.progress != null ? progress.progress : (status?.progress ?? 0);
   const isReady = status?.stage === "ready";
   const running = busy || BUSY.includes(stage);
 
   return (
-    <Panel style={{ marginTop: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <strong style={{ fontSize: 13 }}>{t("runtime.title")}</strong>
-        <span
-          style={{
-            fontSize: 12,
-            color: isReady ? "var(--ok)" : "var(--text-muted)",
-          }}
-        >
-          {t(`runtime.stages.${stage}`, { defaultValue: stage })}
-        </span>
-      </div>
-
-      <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
-        {t("runtime.desc", { size: fmtMB(status?.estimated_download_bytes ?? 259 * 1024 * 1024) })}
+    <Section
+      title={t("runtime.title")}
+      className="mt-5"
+      actions={
+        <Chip size="sm" color={isReady ? "success" : "default"}>
+          <Chip.Label>{t(`runtime.stages.${stage}`, { defaultValue: stage })}</Chip.Label>
+        </Chip>
+      }
+    >
+      <p className="text-xs opacity-70">
+        {t("runtime.desc", {
+          size: fmtMB(status?.estimated_download_bytes ?? 259 * 1024 * 1024),
+        })}
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          fontSize: 12,
-          color: "var(--text-muted)",
-          margin: "10px 0",
-        }}
-      >
+      <div className="mt-3 flex gap-4 text-xs opacity-70">
         <span>
           {t("runtime.size")}: {fmtMB(status?.size_bytes)}
         </span>
         {!isReady && (
           <span>
-            {t("runtime.estimate", {
-              size: fmtMB(status?.estimated_download_bytes),
-            })}
+            {t("runtime.estimate", { size: fmtMB(status?.estimated_download_bytes) })}
           </span>
         )}
       </div>
 
       {running && (
-        <>
-          <ProgressBar value={pct} />
-          {progress?.message && (
-            <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
-              {progress.message}
-            </p>
-          )}
-        </>
+        <div className="mt-3 flex flex-col gap-2">
+          <Progress value={pct} />
+          {progress?.message && <p className="text-xs opacity-70">{progress.message}</p>}
+        </div>
       )}
 
       {!running && (
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-          <Button variant="primary" onClick={install} disabled={busy}>
+        <div className="mt-4 flex gap-2">
+          <PrimaryButton onPress={install} isDisabled={busy}>
             {isReady ? t("runtime.reinstall") : t("runtime.install")}
-          </Button>
+          </PrimaryButton>
           {isReady && (
-            <Button onClick={remove} disabled={busy}>
+            <Button variant="secondary" onPress={() => setConfirmRemove(true)}>
               {t("runtime.remove")}
             </Button>
           )}
@@ -177,21 +162,43 @@ export default function RuntimeSection() {
       )}
 
       {!isReady && !running && (
-        <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text-muted)" }}>
-          {t("runtime.needPython")}
-        </p>
+        <p className="mt-3 text-xs opacity-70">{t("runtime.needPython")}</p>
       )}
 
       {error && (
-        <div style={{ marginTop: 10 }}>
+        <div className="mt-3">
           <ErrorText>{error}</ErrorText>
         </div>
       )}
       {notice && (
-        <div style={{ marginTop: 10 }}>
+        <div className="mt-3">
           <OkText>{notice}</OkText>
         </div>
       )}
-    </Panel>
+
+      {/* 卸载需二次确认：会释放约 900MB，之后需重新下载 */}
+      <Modal.Root isOpen={confirmRemove} onOpenChange={setConfirmRemove}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>{t("runtime.remove")}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm">{t("runtime.confirmRemove")}</p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={() => setConfirmRemove(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button variant="danger" onPress={doRemove}>
+                  {t("runtime.remove")}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal.Root>
+    </Section>
   );
 }

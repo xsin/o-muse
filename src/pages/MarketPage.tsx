@@ -1,91 +1,59 @@
 import { useTranslation } from "react-i18next";
+import { Card, Chip } from "@heroui/react";
 import { useUI, type AppId } from "../store/useUI";
 import { appRegistry } from "../appRegistry";
 
+/** 工具箱首页：以卡片网格呈现所有可用 App。 */
 export default function MarketPage() {
   const { t } = useTranslation();
   const { openApp } = useUI();
 
   return (
-    <div>
-      <h1 style={{ margin: "0 0 4px" }}>{t("market.heading")}</h1>
-      <p style={{ color: "var(--text-muted)", marginTop: 0 }}>
-        {t("market.subtitle")}
-      </p>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-          gap: 16,
-          marginTop: 20,
-        }}
-      >
-        {appRegistry.map((app) => (
-          <Card
-            key={app.id}
-            icon={app.icon}
-            title={t(`apps.${app.id}.name`)}
-            desc={t(`apps.${app.id}.desc`)}
-            badge={app.badge ? t(`apps.${app.id}.soon`) : undefined}
-            enabled={app.enabled}
-            onClick={() => openApp(app.id as AppId)}
-          />
-        ))}
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="text-2xl font-bold">{t("market.heading")}</h1>
+        <p className="mt-1 text-sm opacity-70">{t("market.subtitle")}</p>
       </div>
-    </div>
-  );
-}
 
-function Card({
-  icon,
-  title,
-  desc,
-  badge,
-  enabled,
-  onClick,
-}: {
-  icon: string;
-  title: string;
-  desc: string;
-  badge?: string;
-  enabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <div
-      onClick={enabled ? onClick : undefined}
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius)",
-        padding: 20,
-        boxShadow: "var(--shadow)",
-        cursor: enabled ? "pointer" : "not-allowed",
-        opacity: enabled ? 1 : 0.6,
-        position: "relative",
-      }}
-    >
-      {badge && (
-        <span
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            fontSize: 11,
-            background: "var(--surface-2)",
-            color: "var(--text-muted)",
-            padding: "2px 8px",
-            borderRadius: 999,
-          }}
-        >
-          {badge}
-        </span>
-      )}
-      <div style={{ fontSize: 32 }}>{icon}</div>
-      <h3 style={{ margin: "12px 0 6px" }}>{title}</h3>
-      <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
-        {desc}
-      </p>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+        {appRegistry.map((app) => {
+          const disabled = !app.enabled;
+          return (
+            <Card
+              key={app.id}
+              className={
+                disabled
+                  ? "opacity-60"
+                  : "cursor-pointer transition-transform hover:-translate-y-0.5"
+              }
+            >
+              <Card.Header
+                className="cursor-pointer"
+                onClick={() => !disabled && openApp(app.id as AppId)}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xl">{app.icon}</span>
+                  {disabled && (
+                    <Chip size="sm" color="default">
+                      <Chip.Label>{t("apps.plugins.soon")}</Chip.Label>
+                    </Chip>
+                  )}
+                </div>
+                <Card.Title className="mt-2">{t(`apps.${app.id}.name`)}</Card.Title>
+                <Card.Description>{t(`apps.${app.id}.desc`)}</Card.Description>
+              </Card.Header>
+              <Card.Footer>
+                <span
+                  className="cursor-pointer text-sm font-medium text-accent"
+                  onClick={() => !disabled && openApp(app.id as AppId)}
+                >
+                  {disabled ? t("apps.plugins.soon") : t("market.open")}
+                </span>
+              </Card.Footer>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

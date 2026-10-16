@@ -11,7 +11,7 @@ name = "o_muse_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
 # 桌面框架（Tauri 2 线，保留默认 features 以构造运行时 Builder）
@@ -19,28 +19,31 @@ tauri = { version = "2.12.4", features = [] }
 # 插件（ADR-0001 锁定版本）
 tauri-plugin-shell = "2.5.0"
 tauri-plugin-store = "2.5.0"
-tauri-plugin-sql = { version = "2.6.0", features = ["sqlite"] }
+# 注：曾注册 tauri-plugin-sql，但它与 rusqlite 都链接原生 sqlite3，
+# Cargo 不允许同一 links 值出现两份；且该插件从未被实际调用，
+# 故移除，统一由 rusqlite（bundled）承担 SQLite 访问。
 # 目录选择对话框（Task 9 前端"添加自定义目录"）
-tauri-plugin-dialog = "2.2.0"
+tauri-plugin-dialog = "2.8.3"
 # 序列化
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 # Python sidecar 的 HTTP 通信（调用 FastAPI 分轨服务）
-reqwest = { version = "0.12", features = ["json", "blocking"] }
+# reqwest 0.13 起 json/query/form 等不再是默认特性，需显式开启。
+reqwest = { version = "0.13.5", features = ["json", "query", "blocking"] }
 # Kontakt / XML / plist 解析（Task 3 起使用）
 quick-xml = "0.42.0"
 plist = "1.10.1"
 # 插件元数据增量缓存（Task 8）：bundled 自带 SQLite 源码，无需系统依赖；
 # 使 core/ 保持"无 Tauri 依赖"，可在单元测试中直接建库验证。
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 # 通用工具
 chrono = { version = "0.4.45", features = ["serde"] }
 walkdir = "2.5.0"
 rayon = "1.12.0"
 sha2 = "0.11.1"
 # 运行时自举：解压自包含 CPython 归档（纯 Rust，不经外部进程）
-flate2 = "1.1"
-tar = "0.4"
+flate2 = "1.1.10"
+tar = "0.4.46"
 # statfs 磁盘余量检查
-libc = "0.2"
+libc = "0.2.190"
 thiserror = "2.0.21"

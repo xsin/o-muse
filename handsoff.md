@@ -57,7 +57,7 @@
 
 - 桌面壳：**Tauri 2.12.4**（crate）/ 2.12.3（js/cli）；插件 shell/store/sql = 2.5.0/2.5.0/2.6.0
 - 后端：**Rust**（新增逻辑全 Rust）+ **Python 3.14** Sidecar（fastapi 0.143.1 / uvicorn 0.54.0 / demucs 4.1.0 / librosa 1.0.0 / pyloudnorm 0.2.0）
-- 前端：**React 19.3.1** + **TS 7.0.2** + **Vite 8.3.4** + **TailwindCSS 4** + **react-router-dom 7.18.4** + **Zustand 5.0.15** + **i18next 26.4.5 / react-i18next 17.0.16 / detector 8.2.1**（ADR-0004，中英双语、默认随系统）
+- 前端：**React 19.3.1** + **TS 7.0.2** + **Vite 8.3.4** + **Tailwind CSS 4.3.3** + **HeroUI 3.2.6** + **react-router-dom 7.18.4** + **Zustand 5.0.15** + **i18next 26.4.7 / react-i18next 17.0.19 / detector 8.2.1**（ADR-0004，中英双语、默认随系统）
 - Rust 辅助（升级）：serde 1.0.229 / quick-xml 0.42.0 / plist 1.10.1 / chrono 0.4.45 / walkdir 2.5.0 / rayon 1.12.0 / **sha2 0.11.1（⚠️ breaking）** / thiserror 2.0.21
 - 计费：**Dodo Payments**（`.env`: `DODO_PRODUCT_ID`, `DODO_API_KEY` Test Mode，已备）
 
@@ -173,7 +173,7 @@
 ### Task 8 — 插件元数据 + 增量缓存 (v1.1) ✅ done
 - `extract.rs`：AU/VST3/AAX/CLAP 读 `Contents/Info.plist`（`CFBundleName`/`CFBundleIdentifier`/`CFBundleShortVersionString`）；厂商由 bundle id 反推（`com.acme.x`→`Acme`）；VST2 与 plist 缺失时回退**只读字节模式匹配**（版本/名称）。VST3 任务包 `std::thread::spawn`（plan 要求，避免阻塞主线程）。**全程无 dlopen/LoadLibrary**。
 - `cache.rs`：SQLite `plugin_cache(path PK, file_size, last_modified, name, vendor, version, format, scanned_at)`（与 plan 一致）；失效键 = 路径+`file_size`+`last_modified`；`extract_with_cache()` 返回 `CacheStats{hits,misses}` 便于验证命中率。
-- **决策**：缓存用 `rusqlite 0.32 (bundled)` 而非 `tauri-plugin-sql`，以保持 `core/` 无 Tauri 依赖、可在单元测试中直接建库。已记入 `docs/references.md`。
+- **决策**：缓存用 `rusqlite 0.40 (bundled)`；`tauri-plugin-sql` 已移除（与 rusqlite 争抢同一原生 sqlite3 链接，且从未被调用）。
 
 ### Task 9 — 自定义目录 + 前端集成 (v1.1) ✅ done
 - `plugin_scanner/custom.rs`：自定义源序列化/去重/移除/格式自动检测（单层统计扩展名，最多者胜；不可检测→`Auto`）。**不在 `add_custom_plugin_dir` 内递归扫描**（plan 禁止），递归统一在 `scan_all_plugins`。

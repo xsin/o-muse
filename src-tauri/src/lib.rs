@@ -18,11 +18,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             commands::placeholder,
+            commands::reveal_in_finder,
+            commands::kontakt::kontakt_inventory,
+            commands::kontakt::kontakt_scan,
+            commands::kontakt::kontakt_add,
+            commands::kontakt::kontakt_remove,
+            commands::kontakt::kontakt_nicnt_spec,
+            commands::kontakt::kontakt_create_nicnt,
             commands::stem_separation::separate,
             commands::stem_separation::stem_status,
             commands::stem_separation::stem_results,
@@ -38,6 +44,11 @@ pub fn run() {
             commands::plugin_scanner::add_custom_plugin_dir,
             commands::plugin_scanner::remove_custom_plugin_dir,
             commands::plugin_scanner::rescan_plugins,
+            commands::plugin_scanner::plan_move_plugin,
+            commands::plugin_scanner::move_plugin,
+            commands::plugin_scanner::undo_move_plugin,
+            commands::plugin_scanner::trash_plugin,
+            commands::plugin_scanner::delete_plugin_permanently,
             commands::license::get_tier,
             commands::license::activate_license_key,
         ])

@@ -1,18 +1,18 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Toast } from "@heroui/react";
 import { useUI, type ActiveView } from "./store/useUI";
 import Sidebar from "./components/Sidebar";
 import MarketPage from "./pages/MarketPage";
 import SettingsPage from "./pages/SettingsPage";
 import StemSeparationPage from "./pages/StemSeparationPage";
-import LibraryManagerPage from "./pages/LibraryManagerPage";
+import KontaktLibraryPage from "./pages/KontaktLibraryPage";
 import PluginManagerPage from "./pages/PluginManagerPage";
 
 /**
- * 视图 ↔ URL 双向同步（review 修复）。
+ * 视图 ↔ URL 双向同步。
  *
- * 此前 `<Routes>` 是摆设：`setActive` 不改 URL，刷新后永远回到市场页并丢失
- * 已打开的标签。现在把 activeView 映射为 hash 路由，刷新/深链均可恢复。
+ * activeView 映射为 hash 路由，刷新/深链均可恢复已打开的标签。
  */
 function viewFromHash(hash: string): ActiveView {
   const m = hash.match(/^#\/apps\/([a-z_]+)$/);
@@ -30,10 +30,9 @@ function hashFromView(view: ActiveView): string {
 }
 
 export default function App() {
-  const { activeView, openApps } = useUI();
+  const { activeView, openApps, setActive } = useUI();
   const location = useLocation();
   const navigate = useNavigate();
-  const { setActive } = useUI();
 
   // URL → 视图：刷新 / 深链 / 浏览器前进后退
   useEffect(() => {
@@ -50,22 +49,21 @@ export default function App() {
   }, [activeView]);
 
   return (
-    <div style={{ display: "flex", height: "100%" }}>
-      <Sidebar />
-      <main style={{ flex: 1, overflow: "auto", padding: 24, minWidth: 0 }}>
-        {activeView === "market" && <MarketPage />}
-        {activeView === "settings" && <SettingsPage />}
-        {openApps.map((id) => (
-          <div
-            key={id}
-            style={{ display: activeView === id ? "block" : "none" }}
-          >
-            {id === "stem_separation" && <StemSeparationPage />}
-            {id === "libraries" && <LibraryManagerPage />}
-            {id === "plugins" && <PluginManagerPage />}
-          </div>
-        ))}
-      </main>
-    </div>
+    <Toast.Provider>
+      <div className="flex h-full bg-background text-foreground">
+        <Sidebar />
+        <main className="min-w-0 flex-1 overflow-auto p-6">
+          {activeView === "market" && <MarketPage />}
+          {activeView === "settings" && <SettingsPage />}
+          {openApps.map((id) => (
+            <div key={id} className={activeView === id ? "block" : "hidden"}>
+              {id === "stem_separation" && <StemSeparationPage />}
+              {id === "libraries" && <KontaktLibraryPage />}
+              {id === "plugins" && <PluginManagerPage />}
+            </div>
+          ))}
+        </main>
+      </div>
+    </Toast.Provider>
   );
 }

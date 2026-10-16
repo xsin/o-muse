@@ -11,8 +11,8 @@
 | 插件 | plugin-shell / store / sql | 2.5.0 / 2.5.0 / 2.6.0 | sql 用 `features=["sqlite"]` |
 | 后端主逻辑 | Rust | 1.99 | 新增模块全用 Rust |
 | 分轨引擎 | Python + FastAPI（Sidecar） | 开发态 Python 3.14；运行态自举 CPython 3.12.15 | 运行时依赖锁定于 `requirements-runtime.txt`：fastapi 0.143.2 / uvicorn 0.54.0 / demucs 4.1.0 / numpy ≥1.26,<2（不含 librosa/pyloudnorm） |
-| 前端 | React 18 + TS 5 + Vite 5（样式用 CSS 变量，未引入 Tailwind） | react 18.3.1 / react-dom 18.3.1 / react-router-dom 6.27.0 / vite 5.4.10 / @vitejs/plugin-react 4.3.3 / typescript 5.6.3 / zustand 4.5.5 | |
-| 本地存储 | SQLite via tauri-plugin-sql | 2.6.0 | |
+| 前端 | React 19 + TS 7 + Vite 8 + Tailwind CSS 4 + HeroUI 3 | react 19.3.1 / react-dom 19.3.1 / react-router-dom 7.18.4 / vite 8.3.4 / @vitejs/plugin-react 6.1.2 / typescript 7.0.2 / tailwindcss 4.3.3 / @heroui/react 3.2.6 / zustand 5.0.15 / i18next 26.4.7 / react-i18next 17.0.19 | |
+| 本地存储 | SQLite via `rusqlite`（bundled，`core/` 内直接用，无 Tauri 依赖） | 0.40.2 | |
 | 计费 | Dodo Payments | — | Test Mode Key 已备（ADR-0003） |
 | 国际化 | i18next + react-i18next + browser-languagedetector | i18next 26.4.5 / react-i18next 17.0.16 / detector 8.2.1 | zh-CN + en-US，默认随系统（ADR-0004） |
 | 主题 | CSS 变量 + `data-theme`，系统跟随 | — | 亮/暗双主题（PRD FR-9） |
@@ -241,5 +241,5 @@ htdemucs 权重 `955717e8-8726e21a.th` 也按固定 SHA256 校验。
 - 逐 Task 执行（见 `handsoff.md`）：Task 0→1→2→3→4→5→6（v1），Task 7→8→9→10（v1.1）。
 - 分轨运行时自举（v1.2）在 v1 链路打通后落地：`core/stem_engine/runtime.rs`（自举）+
   `commands/stem_separation.rs` 的三个运行时命令 + 设置页 `RuntimeSection` + 分轨页未就绪引导。
-- 升级风险（ADR-0001）：`sha2 0.11` 改 hash 调用；React19/Vite8/TS7 若与 Tauri 模板摩擦，兜底回退 React18+Vite5，并在该 Task 记录。
+- 前端栈已升级至最新（React 19 / Vite 8 / TS 7 / Tailwind 4 / HeroUI 3），与 Tauri 2.12 模板无摩擦。
 - Dodo 集成（ADR-0003）替代 plan Task 5 的"不做网络校验"。

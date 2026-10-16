@@ -1,24 +1,22 @@
 # O Muse — 分轨运行时依赖（锁定版本，供首次启动自举使用）
 #
 # 与 requirements.txt 的区别：
-#   - requirements.txt  = 开发态松散约束（含可选/预留依赖）
+#   - requirements.txt  = 开发态松散约束
 #   - 本文件            = 应用运行时实际安装的精简锁定集
-#
-# 精简说明：librosa / pyloudnorm / soundfile **当前代码并未使用**
-# （仅在 requirements.txt 中作为后续响度对齐的预留），
-# 而 librosa 会引入 numba/llvmlite 等大体积包，故运行时不再安装。
 #
 # ⚠️ numpy 必须显式声明
 #   demucs 4.1.0 仅在 `sys_platform == 'darwin' and platform_machine == 'x86_64'`
-#   时才声明 numpy，Apple Silicon（arm64）上**不会**被安装；
+#   时才声明 numpy，Apple Silicon（arm64）上不会被安装；
 #   而 demucs/transformer.py 直接 `import numpy as np` →
 #   缺 numpy 会导致 arm64 上分轨必然失败（已实测复现）。
-#   这里用 <2 同时满足 demucs 在 x86_64 上的 `numpy<2` 约束，两个架构通用。
 #
-# 版本策略：直接依赖锁定精确版本，传递依赖由 pip 解析。
+#   版本按平台分别约束：Apple Silicon 与其它平台用最新 numpy 2.x；
+#   仅 Intel Mac 需要 <2，因为 demucs 对 darwin+x86_64 声明了 `numpy<2`。
+#
 # 安装时使用 --only-binary=:all: 强制走 wheel，避免执行源码包构建脚本。
 
 fastapi==0.143.2
 uvicorn==0.54.0
-numpy>=1.26,<2
+numpy>=2.5,<3; sys_platform != "darwin" or platform_machine != "x86_64"
+numpy>=1.26,<2; sys_platform == "darwin" and platform_machine == "x86_64"
 demucs==4.1.0

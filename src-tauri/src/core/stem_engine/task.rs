@@ -33,6 +33,9 @@ pub struct StartResponse {
 }
 
 /// `GET /status/{job_id}` 的响应。
+///
+/// 新增字段一律带 `#[serde(default)]`：旧版 sidecar 不返回它们时仍能反序列化，
+/// 避免前后端版本错配直接把整条分轨链路打死。
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StatusResponse {
     pub job_id: String,
@@ -44,6 +47,22 @@ pub struct StatusResponse {
     pub demo: bool,
     /// 已可用分轨名称列表（如 vocals / drums / bass / other）。
     pub stems: Vec<String>,
+    /// 任务类型：separate | analyze。
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// 机器可读的当前阶段：loading_model / reading_audio / separating /
+    /// writing_stems / analyzing_key / analyzing_tempo / done / failed …
+    #[serde(default)]
+    pub stage: Option<String>,
+    /// 调性 + BPM 分析结果（`{"key":{...},"tempo":{...},"duration_sec":f}`）。
+    #[serde(default)]
+    pub analysis: Option<serde_json::Value>,
+    /// 本次任务**实际生效**的推理设备：mps | cpu。仅分析任务为 null。
+    #[serde(default)]
+    pub device: Option<String>,
+    /// 设备降级说明（如 MPS 失败后回退 CPU 的原因）。
+    #[serde(default)]
+    pub device_note: Option<String>,
 }
 
 /// `/stems/{job_id}` 中单个分轨文件条目。
@@ -64,13 +83,28 @@ pub struct StemsResponse {
 
 /// 提交一个分轨任务，返回 job_id。
 pub fn start(base: &str, file_path: &str) -> Result<String> {
+    submit(base, "separate", file_path)
+}
+
+/// 提交一个**仅分析**任务（调性 + BPM），返回 job_id。
+///
+/// 与分轨共用同一条任务通道：相同状态机、相同 `stem_status` 轮询接口，
+/// 结果落在 `/status` 的 `analysis` 字段里。
+pub fn analyze(base: &str, file_path: &str) -> Result<String> {
+    submit(base, "analyze", file_path)
+}
+
+fn submit(base: &str, endpoint: &str, file_path: &str) -> Result<String> {
     let resp = client()
-        .post(format!("{base}/separate"))
+        .post(format!("{base}/{endpoint}"))
         .json(&serde_json::json!({ "file_path": file_path }))
         .send()
         .map_err(|e| Error::Http(e.to_string()))?;
     if !resp.status().is_success() {
-        return Err(Error::Http(format!("separate returned {}", resp.status())));
+        return Err(Error::Http(format!(
+            "{endpoint} returned {}",
+            resp.status()
+        )));
     }
     let body: StartResponse = resp.json().map_err(|e| Error::Http(e.to_string()))?;
     Ok(body.job_id)

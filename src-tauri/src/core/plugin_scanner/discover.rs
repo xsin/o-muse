@@ -23,6 +23,18 @@ pub fn default_sources() -> Vec<ScanSource> {
         .collect()
 }
 
+/// 只含 **VST3** 标准目录的默认扫描源（v1.2）。
+///
+/// 为什么默认只扫 VST3：VST3 是当前事实标准（且目录最干净），而全格式扫描
+/// 要遍历 10+ 个目录并对每个 bundle 递归求和大小；"打开插件管理器"应当是
+/// 一次轻量操作。其余格式由前端"格式切换"显式触发（传 `format` 参数）。
+pub fn default_sources_vst3() -> Vec<ScanSource> {
+    default_sources()
+        .into_iter()
+        .filter(|s| s.plugin_format == PluginFormat::VST3)
+        .collect()
+}
+
 /// 在给定扫描源中发现插件宿主条目。
 ///
 /// - 按 `PluginFormat::all_extensions()` 过滤扩展名
@@ -149,6 +161,22 @@ mod tests {
             .path
             .to_string_lossy()
             .contains("Avid/Audio/Plug-Ins"));
+    }
+
+    #[test]
+    fn default_sources_vst3_only_contains_vst3() {
+        let srcs = default_sources_vst3();
+        assert!(!srcs.is_empty(), "VST3 默认源不应为空");
+        assert!(
+            srcs.iter().all(|s| s.plugin_format == PluginFormat::VST3),
+            "默认源只应含 VST3"
+        );
+        // 全部来自标准源（非自定义）
+        assert!(srcs.iter().all(|s| !s.is_custom));
+        // 至少覆盖系统级 /Library/Audio/Plug-Ins/VST3
+        assert!(srcs
+            .iter()
+            .any(|s| s.path == PathBuf::from("/Library/Audio/Plug-Ins/VST3")));
     }
 
     #[test]

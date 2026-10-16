@@ -1,9 +1,12 @@
-# O Muse — 分轨后端依赖（Task 2）
-# Demucs 为实际分轨引擎（MIT），其余为服务编排依赖。
-# 对应参考记录见 docs/references.md（Demucs 条目）。
+# O Muse — 分轨后端依赖（开发态松散约束）
+#
+# 应用实际运行使用 requirements-runtime.txt（锁定版本、精简集）；
+# 本文件仅供开发者搭建环境时参考，允许较宽的版本范围。
+#
+# 注：响度对齐（loudness normalization）尚未实现，此前预留的 librosa /
+# pyloudnorm 当前代码并未使用，且 librosa 会引入 numba/llvmlite 等大体积包，
+# 故不再列入。将来实现该能力时再按需添加并锁定版本。
 
-fastapi>=0.115,<1.0
-uvicorn[standard]>=0.30
-demucs>=4.0
-librosa>=0.10
-pyloudnorm>=0.1.1
+fastapi>=0.143,<1.0
+uvicorn>=0.54
+demucs>=4.1
