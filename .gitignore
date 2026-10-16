@@ -25,3 +25,10 @@ src-tauri/target
 
 # ── workspace-local npm cache (sandbox: ~/.npm denied) ──
 .npm-cache/
+
+# 分发产物（zip/dmg/checksums）由 CI 上传 GitHub Releases，不入库；
+# 但 install.sh 需纳入版本控制（可审计 + 稳定 URL 提供）。
+releases/*
+!releases/latest/
+releases/latest/*
+!releases/latest/install.sh

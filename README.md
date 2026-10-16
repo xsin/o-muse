@@ -56,7 +56,65 @@ Meta 的 [Demucs](https://github.com/facebookresearch/demucs)（MIT），
 
 ## 快速开始
 
-（待补充：安装方式、系统要求、首次启动流程）
+### 安装（公测版，macOS）
+
+当前为**公测阶段**：未使用 Apple 开发者签名、未经 App Store 分发、未做公证。
+推荐一条命令安装：
+
+```bash
+curl -fsSL https://<domain>/releases/latest/install.sh | bash
+```
+
+默认安装到 `~/Applications/Music Rig.app`（**不需要 sudo**），安装完成后自动启动。
+
+想先审计脚本再执行（推荐给注重安全的用户）：
+
+```bash
+curl -fsSL https://<domain>/releases/latest/install.sh -o install.sh
+less install.sh
+bash install.sh
+```
+
+**说明：**
+
+- 当前是公测版，未使用 Apple 开发者签名和公证。
+- 通过 `curl` 安装（zip 分发）通常不会触发 Gatekeeper 隔离。
+- 如果首次打开仍被阻止，**右键点击应用选择"打开"**，或到
+  **系统设置 > 隐私与安全性**点击"仍要打开"。
+- 如果看到"已损坏"提示，执行：
+
+  ```bash
+  xattr -dr com.apple.quarantine ~/Applications/Music\ Rig.app
+  ```
+
+**其他参数：**
+
+| 参数 | 作用 |
+|---|---|
+| `--version <v>` | 安装指定版本（默认最新版） |
+| `--install-dir <dir>` | 自定义安装目录 |
+| `--no-launch` | 安装后不启动 |
+| `--system` | 安装到 `/Applications`（需要 sudo） |
+
+**更新：** 重新运行同一条安装命令即可，会覆盖旧版本并**保留你的数据**
+（license、界面偏好、插件缓存位于
+`~/Library/Application Support/com.musicrig.desktop/`，不在应用包内）。
+
+> 分发与签名的完整技术方案见
+> [`docs/tech-release-without-developer-id.md`](docs/tech-release-without-developer-id.md)。
+
+### 系统要求
+
+- macOS 10.13 或更高
+- Apple Silicon 或 Intel（universal 包优先；无 universal 时按架构选择）
+- 分轨功能依赖本地 Python 环境（首次使用会自动拉起内置 sidecar）
+
+### 首次启动流程
+
+1. 应用启动后默认进入「工具箱」。
+2. 打开「分轨分离」，选择音频文件，点击"开始分轨"。
+3. 首次运行会启动本地分轨服务（可能需要数十秒）。
+4. 若 Demucs 不可用，会以**演示模式**返回模拟结果，界面会明确标注。
 
 ## 许可证
 
