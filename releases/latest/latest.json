@@ -1,0 +1,15 @@
+{
+  "version": "0.2.2",
+  "notes": "O Muse 0.2.2 更新",
+  "pub_date": "2026-10-16T10:08:06Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://xsin.github.io/o-muse/releases/0.2.2/O%20Muse-0.2.2-arm64.app.tar.gz",
+      "sha256": "838ae83ef5b1c6a9cbea8c6e2039738999a9539cc510a3f4d672f93badd51bb3"
+    },
+    "darwin-x86_64": {
+      "url": "https://xsin.github.io/o-muse/releases/0.2.2/O%20Muse-0.2.2-x86_64.app.tar.gz",
+      "sha256": "c5959108ed0009e535defec4378878bd48d93edece724f8a48d477d1c42d5008"
+    }
+  }
+}
