@@ -25,8 +25,6 @@ BASE_URL="${OMUSE_BASE_URL:-https://xsin.github.io/o-muse/releases/latest}"
 VERSION="latest"
 # 由 VERSION.txt 解析出的真实版本号（--version latest 时使用）
 RESOLVED_VERSION=""
-# 是否从 <root>/latest/VERSION.txt 解析出版本（用于优选下载布局）
-RESOLVED_FROM_ROOT=""
 DOWNLOAD_URL=""
 INSTALL_ROOT="${HOME}/Applications"
 DO_LAUNCH=1
@@ -93,86 +91,112 @@ RELEASES_ROOT="${RELEASES_ROOT%/latest/download}"
 RELEASES_ROOT="${RELEASES_ROOT%/latest}"
 RELEASES_ROOT="${RELEASES_ROOT%/}"
 
-# 目录布局兼容两种托管，下载时按顺序尝试、命中即用：
-#   自建/Pages： <root>/<version>/<file>
-#   GitHub    ： <root>/<version>/download/<file>
+# latest 解析：两种托管的"最新版"入口路径不同，都试一次
+#   Pages/自建： <root>/latest/VERSION.txt
+#   GitHub    ： <root>/latest/download/VERSION.txt（GitHub 的 latest 资产别名）
 if [ "$VERSION" = "latest" ]; then
-  # 网络失败不得让脚本退出（set -e 会继承命令替换的失败状态），
-  # 故显式兜底为 0 退出。
-  RESOLVED_VERSION="$(curl -fsL --retry 3 --retry-delay 2 -sS \
-    "${RELEASES_ROOT}/latest/VERSION.txt" 2>/dev/null | tr -d '[:space:]' || true)"
+  for vt in "${RELEASES_ROOT}/latest/VERSION.txt" \
+            "${RELEASES_ROOT}/latest/download/VERSION.txt"; do
+    # 网络失败不得让脚本退出（set -e 会继承命令替换的失败状态），故 `|| true`
+    RESOLVED_VERSION="$(curl -fsL --retry 3 --retry-delay 2 -sS "$vt" 2>/dev/null \
+      | tr -d '[:space:]' || true)"
+    [ -n "$RESOLVED_VERSION" ] && break
+  done
   if [ -n "$RESOLVED_VERSION" ]; then
-    RESOLVED_FROM_ROOT=1
     log "解析到最新版本：${RESOLVED_VERSION}"
   else
-    log "未找到 VERSION.txt，尝试 latest-<arch> 命名"
+    log "未找到 VERSION.txt，按 latest 标签直接取产物"
   fi
 fi
 
-if [ -n "$RESOLVED_VERSION" ]; then
-  VERSION_DIR_BASE="${RELEASES_ROOT}/${RESOLVED_VERSION}"
-  # VERSION.txt 能从 <root>/latest/ 取到 ⇒ 这是 Pages/自建风格，
-  # 先试纯版本目录；否则按 GitHub Releases 风格先试 /download/。
-  # 两种都会尝试，命中即用，只是把更可能成功的排在前面以减少无谓请求。
-  if [ -n "$RESOLVED_FROM_ROOT" ]; then
-    BASE_CANDIDATES="${VERSION_DIR_BASE} ${VERSION_DIR_BASE}/download"
-  else
-    BASE_CANDIDATES="${VERSION_DIR_BASE}/download ${VERSION_DIR_BASE}"
+# 候选下载基址。两种托管的路径布局不同，全部列出、按序尝试、命中即用：
+#   Pages/自建    ： <root>/<version>/<file>
+#   GitHub Release： <root>/download/<tag>/<file>   ← 注意是 download 在前
+#   GitHub tag 常带 v 前缀（v0.1.0），而版本号是 0.1.0，故两种都列。
+build_base_candidates() {
+  local v="$1"
+  local out="$RELEASES_ROOT/$v"
+  if [ -n "$v" ]; then
+    out="$out $RELEASES_ROOT/download/$v"
+    case "$v" in
+      v*) out="$out $RELEASES_ROOT/download/${v#v}" ;;
+      *)  out="$out $RELEASES_ROOT/download/v$v" ;;
+    esac
   fi
+  printf '%s' "$out"
+}
+
+if [ -n "$RESOLVED_VERSION" ]; then
+  BASE_CANDIDATES="$(build_base_candidates "$RESOLVED_VERSION")"
 elif [ "$VERSION" = "latest" ]; then
-  BASE_CANDIDATES="${RELEASES_ROOT}/latest"
+  BASE_CANDIDATES="${RELEASES_ROOT}/latest ${RELEASES_ROOT}/latest/download"
 else
-  VERSION_DIR_BASE="${RELEASES_ROOT}/${VERSION}"
-  BASE_CANDIDATES="${VERSION_DIR_BASE}/download ${VERSION_DIR_BASE}"
+  BASE_CANDIDATES="$(build_base_candidates "$VERSION")"
 fi
+
+# 尝试下载单个 URL；成功（且内容确为 zip）返回 0 并把路径写入 $ZIP_PATH。
+#
+# 以**落盘内容的魔术字节**判定真伪，而不是 curl 的退出码：
+# GitHub Pages 对缺失文件会返回 "HTTP 404 + HTML body"，经代理链路时
+# 甚至表现为连接重置（curl 退出 56）而非 -f 期望的 22，状态码不可信。
+try_download() {
+  local url="$1"
+  local out="$2"
+
+  if ! curl -fL --retry 3 --retry-delay 2 -sS -o "$out" "$url" 2>/dev/null; then
+    rm -f "$out"
+    return 1
+  fi
+  [ -s "$out" ] || { rm -f "$out"; return 1; }
+  # zip 本地文件头魔术字节为 "PK"（PK\x03\x04）
+  [ "$(head -c 2 "$out" 2>/dev/null)" = "PK" ] || { rm -f "$out"; return 1; }
+  return 0
+}
 
 # 下载指定架构的包；成功则把本地路径写到 $ZIP_PATH 并返回 0。
 # 注意：成功与否用返回码传递，日志不参与（全部 stderr）。
 download_candidate() {
   local want="$1"
-  local zipname
+  # 产物文件名用**不带 v 前缀**的版本号：GitHub tag 常写 v0.1.0，
+  # 而构建产出的文件名是 O Muse-0.1.0-<arch>.zip。
+  local ver_for_name
   if [ -n "$RESOLVED_VERSION" ]; then
-    zipname="${APP_NAME}-${RESOLVED_VERSION}-${want}.zip"
-  elif [ "$VERSION" = "latest" ]; then
-    zipname="${APP_NAME}-latest-${want}.zip"
+    ver_for_name="${RESOLVED_VERSION#v}"
   else
-    zipname="${APP_NAME}-${VERSION}-${want}.zip"
+    ver_for_name="${VERSION#v}"
   fi
 
-  local out
-  out="$TMP_DIR/$zipname"
+  local zipname
+  if [ "$ver_for_name" = "latest" ]; then
+    zipname="${APP_NAME}-latest-${want}.zip"
+  else
+    zipname="${APP_NAME}-${ver_for_name}-${want}.zip"
+  fi
 
-  # 依次尝试各候选基址（GitHub /download/ 风格 + 纯版本目录）
+  # GitHub Releases 会把 asset 名中的空格替换为点
+  # （"O Muse-1.0-arm64.zip" → "O.Muse-1.0-arm64.zip"），
+  # 而 gh-pages / 自建托管保留空格。注意**不能**用空格做词分割来遍历
+  # 变体——文件名本身含空格会被拆碎，故这里显式逐个尝试。
+  local zipname_dot
+  zipname_dot="$(printf '%s' "$zipname" | tr ' ' '.')"
+
+  local out="$TMP_DIR/$zipname"
+
+  # 候选基址（GitHub /download/ 风格 + 纯版本目录）× 文件名变体
   local base
   for base in $BASE_CANDIDATES; do
-    local url
-    url="${base}/$(urlencode "$zipname")"
-    log "尝试下载：${zipname} ← ${base}"
-
-    # 直接下载后用**魔术字节**判定内容真伪。
-    # 不能只信 curl -f 的退出码：GitHub Pages 对缺失文件会返回
-    # "HTTP 404 + HTML body"（经代理时甚至表现为连接重置/退出 56），
-    # 也不保证一定给出 404 状态码，故以落盘内容为准。
-    if ! curl -fL --retry 3 --retry-delay 2 -sS -o "$out" "$url" 2>/dev/null; then
-      log "  → 下载失败，尝试下一个地址"
-      rm -f "$out"
-      continue
+    if try_download "${base}/$(urlencode "$zipname")" "$out"; then
+      log "已下载：${zipname} ← ${base}"
+      ZIP_PATH="$out"; DOWNLOAD_URL="${base}/$(urlencode "$zipname")"
+      return 0
     fi
-    if [ ! -s "$out" ]; then
-      log "  → 空响应，尝试下一个地址"
-      rm -f "$out"
-      continue
+    if [ "$zipname_dot" != "$zipname" ]; then
+      if try_download "${base}/$(urlencode "$zipname_dot")" "$out"; then
+        log "已下载：${zipname_dot} ← ${base}（Releases 命名变体）"
+        ZIP_PATH="$out"; DOWNLOAD_URL="${base}/$(urlencode "$zipname_dot")"
+        return 0
+      fi
     fi
-    # zip 本地文件头魔术字节为 "PK"（PK\x03\x04）
-    if [ "$(head -c 2 "$out" 2>/dev/null)" != "PK" ]; then
-      log "  → 内容不是 zip（可能为 404 页面），尝试下一个地址"
-      rm -f "$out"
-      continue
-    fi
-
-    ZIP_PATH="$out"
-    DOWNLOAD_URL="$url"
-    return 0
   done
   return 1
 }
@@ -192,19 +216,28 @@ ok "已获取 ${SELECTED_ARCH} 包：$(basename "$ZIP_PATH")"
 
 # ---- SHA256 校验 ---------------------------------------------------------
 # 优先从 checksums.txt 找对应行，回退到 <file>.sha256。
-# 文件名含空格，故 checksums.txt 用 shasum 的双列格式
-# （"<hash>  <filename>"），用最后一个字段取文件名匹配。
+# checksums.txt 用 shasum 的双列格式（"<hash>  <filename>"）。
+# 匹配时把空格与点视为等价，以兼容 GitHub Releases 对 asset 名的
+# 空格→点替换（checksums 内容仍写原始名，asset 名可能已被改写）。
 BASE_NAME="$(basename "$ZIP_PATH")"
+BASE_NAME_NORM="$(printf '%s' "$BASE_NAME" | tr ' .' '--')"
 EXPECTED=""
 CHECKSUMS_URL="$(dirname "$DOWNLOAD_URL")/checksums.txt"
 if curl -fL --retry 3 --retry-delay 2 -sS -o "$TMP_DIR/checksums.txt" "$CHECKSUMS_URL" 2>/dev/null; then
-  EXPECTED="$(awk -v want="$BASE_NAME" '{ f=$NF; if (f==want) { print $1; exit } }' "$TMP_DIR/checksums.txt")"
+  EXPECTED="$(awk -v want="$BASE_NAME_NORM" '
+    { f=$NF; gsub(/[ .]/, "-", f); if (f==want) { print $1; exit } }
+  ' "$TMP_DIR/checksums.txt")"
 fi
 if [ -z "$EXPECTED" ]; then
-  SHA_URL="$(dirname "$DOWNLOAD_URL")/$(urlencode "$BASE_NAME").sha256"
-  if curl -fL --retry 3 --retry-delay 2 -sS -o "$TMP_DIR/pkg.sha256" "$SHA_URL" 2>/dev/null; then
-    EXPECTED="$(awk '{print $1}' "$TMP_DIR/pkg.sha256" | head -n1)"
-  fi
+  # <name>.sha256 也逐个变体尝试（同样不能用空格做词分割）
+  BASE_NAME_DOT="$(printf '%s' "$BASE_NAME" | tr ' ' '.')"
+  for try_name in "$BASE_NAME" "$BASE_NAME_DOT"; do
+    SHA_URL="$(dirname "$DOWNLOAD_URL")/$(urlencode "$try_name").sha256"
+    if curl -fL --retry 3 --retry-delay 2 -sS -o "$TMP_DIR/pkg.sha256" "$SHA_URL" 2>/dev/null; then
+      EXPECTED="$(awk '{print $1}' "$TMP_DIR/pkg.sha256" | head -n1)"
+      [ -n "$EXPECTED" ] && break
+    fi
+  done
 fi
 
 ACTUAL="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"

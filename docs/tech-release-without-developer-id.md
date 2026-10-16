@@ -111,6 +111,10 @@ releases/latest/*
 `VERSION.txt` 不入库——它在每次发布时由 `build.sh` 生成，来源仍是
 `tauri.conf.json` 的 `version`。
 
+发布时同一批产物会**同时**进入两个通道（见 §6.4）：`gh-pages` 分支的
+`releases/` 目录（安装通道），以及同名 tag 的 GitHub Release（归档通道）。
+两者的 `install.sh` / `VERSION.txt` / `checksums.txt` / zip 内容完全一致。
+
 ### 4.2 latest 如何解析到真实版本
 
 产物按**真实版本号**命名（`O Muse-0.1.0-arm64.zip`），`latest` 只是标签。
@@ -209,9 +213,25 @@ bash install.sh
 `build.sh` 已读取这些变量：`SIGN_IDENTITY` 决定 `codesign --sign` 的签名身份；
 `NOTARIZE=1` 时才执行 `notarytool submit` / `stapler staple`（当前为 no-op 分支）。
 
-### 6.4 托管与 URL
+### 6.4 双通道发布：gh-pages + GitHub Release
 
-**主分发**：GitHub Pages（`gh-pages` 分支）。CI 把产物写到该分支的
+每次发布**同时**产出两个通道，二者由同一次构建产生、内容一致，不会分叉：
+
+| 通道 | 定位 | 内容 | 特点 |
+|---|---|---|---|
+| `gh-pages` 分支 | **安装通道** | `install.sh`、`VERSION.txt`、`checksums.txt`、zip | 可变 `latest` 指针，`curl` 的默认来源 |
+| GitHub Release | **版本归档** | 同一批产物 + `install.sh` + `VERSION.txt` | 不可变 tag 快照、变更说明、人工下载入口、自动源码包、关注者通知 |
+
+为什么要两个都发（惯例做法）：
+
+- Release 面向**人和流程**：测试用户能看到"这一版改了什么"，可手动下载，
+  watch 仓库的人会收到通知，`/releases/latest` 提供稳定的跳转页。
+- gh-pages 面向**安装脚本**：需要一个始终指向最新版的**可变**入口，
+  而 Release 按定义是不可变的，不能承担这个职责。
+
+### 6.4.1 托管与 URL
+
+**安装通道**：GitHub Pages（`gh-pages` 分支）。CI 把产物写到该分支的
 `releases/` 下，Pages 直接静态服务：
 
 ```
@@ -238,6 +258,25 @@ https://host/releases/latest/download
 > → 分支 `gh-pages`、目录 `/ (root)`。未启用时 `curl` 会 404，
 > 脚本会明确报错而不会静默失败。
 
+**归档通道**：`gh release create`，tag 形如 `v<version>`。
+用户可直接从 Release 页面手动下载 zip。
+
+### 6.4.2 把基址指向 Releases 也能用
+
+脚本同时兼容两种托管的路径布局与命名差异，故 `OMUSE_BASE_URL` 指向
+`https://github.com/<owner>/<repo>/releases` 亦可正常工作：
+
+| 差异点 | gh-pages | GitHub Releases |
+|---|---|---|
+| 产物路径 | `<root>/<version>/<file>` | `<root>/download/<tag>/<file>` |
+| tag vs 版本号 | 相同（`0.1.0`） | tag 常带 `v`（`v0.1.0`） |
+| asset 文件名 | 保留空格 | **空格被替换为点** |
+| `latest` 入口 | `<root>/latest/VERSION.txt` | `<root>/latest/download/VERSION.txt` |
+
+对应处理：候选基址会同时列出 `<root>/<v>`、`<root>/download/<v>`、
+`<root>/download/v<v>`；文件名与 checksums 匹配时把**空格与点视为等价**；
+`latest` 解析会依次尝试两种入口。
+
 ### 6.5 静态托管的两个实战坑（已在脚本中处理）
 
 静态托管（GitHub Pages / CDN）的 404 行为与普通服务器不同，
@@ -250,6 +289,11 @@ https://host/releases/latest/download
 2. **`set -e` + `pipefail` 下命令替换失败会终止整个脚本**。
    所有"允许失败"的网络取数（如 `VERSION.txt` 探测）显式 `|| true` 兜底，
    避免一次网络抖动就让安装中断。
+3. **GitHub 会把 Release asset 名里的空格换成点**
+   （`O Muse-0.1.0-arm64.zip` → `O.Muse-0.1.0-arm64.zip`），
+   而 `checksums.txt` 里写的仍是原始名。
+   → 下载时对同一基址尝试"原名"和"点号变体"两种文件名；
+   校验和匹配时把空格与点归一化后再比较。
 
 ---
 
@@ -314,6 +358,8 @@ curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash
 | 重复执行可覆盖更新、数据保留 | 二次安装，检查 Application Support 数据未变 |
 | Dodo 授权流程正常 | 复用现有 `license` 模块，未改动 |
 | 将来只改 `SIGN_IDENTITY` + 公证，不重写脚本 | 环境变量已参数化，公证分支已预留 |
+| gh-pages 安装通道可用 | `curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh \| bash` |
+| Release 归档通道可用 | Release 页面可手动下载 zip；`OMUSE_BASE_URL` 指向 Releases 亦能安装 |
 
 本地可复现的验证命令见 §10.1。
 
@@ -330,6 +376,11 @@ shellcheck releases/latest/install.sh
 bash releases/latest/install.sh --install-dir /tmp/omuse-install --no-launch
 
 # 4) 校验失败路径：故意损坏 zip，脚本应报错退出
+
+# 5) 两个通道都要能装（gh-pages 与 Releases）
+bash releases/latest/install.sh --install-dir /tmp/omuse-a --no-launch
+OMUSE_BASE_URL="https://github.com/xsin/o-muse/releases" \
+  bash releases/latest/install.sh --install-dir /tmp/omuse-b --no-launch
 ```
 
 ---

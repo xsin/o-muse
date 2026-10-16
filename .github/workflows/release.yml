@@ -110,13 +110,65 @@ jobs:
           git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
           echo "published to gh-pages"
 
+      # 同时生成 GitHub Release：gh-pages 是"安装通道"（可变 latest），
+      # Release 是"版本归档"（不可变 + 变更说明 + 人工下载入口 + 关注者通知）。
+      # 两者由同一次构建产出，内容一致，不会分叉。
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="${{ steps.ver.outputs.version }}"
+          TAG="${{ steps.ver.outputs.tag }}"
+          DIR="$RUNNER_TEMP/site/releases/$V"
+
+          # tag 已存在则先删 Release 再重建，保证 workflow 可重复执行
+          gh release view "$TAG" >/dev/null 2>&1 && gh release delete "$TAG" -y || true
+          # 同时清掉可能已存在的同名远端 tag，避免 tag 指向旧提交
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "O Muse ${V} (public beta)" \
+            --notes "公测版：ad-hoc 签名分发，未经 Apple 公证。
+
+**安装（推荐）**
+
+\`\`\`bash
+curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash
+\`\`\`
+
+**手动下载**：见下方 Assets。首次打开若被 Gatekeeper 阻止，请右键 → 打开，
+或执行 \`xattr -dr com.apple.quarantine ~/Applications/O\\ Muse.app\`。
+
+完整说明见 [docs/tech-release-without-developer-id.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/tech-release-without-developer-id.md)。" \
+            --generate-notes
+
+          # 归档产物（与 gh-pages 同一份构建产物）
+          for f in "$DIR"/*; do
+            [ -e "$f" ] || continue
+            gh release upload "$TAG" "$f" --clobber
+          done
+
+          # install.sh 与 VERSION.txt 也作为 release asset 上传：
+          # 这样把基址指向 Releases 时，latest 解析可通过 GitHub 的
+          # /releases/latest/download/VERSION.txt 别名生效。
+          cp scripts/release/install.sh "$RUNNER_TEMP/install.sh"
+          gh release upload "$TAG" "$RUNNER_TEMP/install.sh" --clobber
+          gh release upload "$TAG" "$RUNNER_TEMP/site/releases/latest/VERSION.txt" --clobber
+
+          echo "=== release assets ==="
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+
       - name: Summary
         run: |
           V="${{ steps.ver.outputs.version }}"
           {
             echo "### O Muse ${V} (public beta) 已发布"
             echo ""
+            echo "**安装通道** — gh-pages（\`latest\` 可变指针）："
             echo '```bash'
             echo "curl -fsSL https://xsin.github.io/o-muse/releases/latest/install.sh | bash"
             echo '```'
+            echo "**版本归档** — GitHub Release：https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ steps.ver.outputs.tag }}"
           } >> "$GITHUB_STEP_SUMMARY"
